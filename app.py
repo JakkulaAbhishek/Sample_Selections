@@ -4,114 +4,127 @@ import numpy as np
 import plotly.express as px
 from io import BytesIO
 
-# --- 1. PAGE CONFIG & UI ---
-st.set_page_config(page_title="Audit Analytics & TDS Tool", layout="wide")
-st.title("🛡️ Audit Sampling & TDS Compliance Dashboard")
+# --- 1. CONFIG & UI ---
+st.set_page_config(page_title="Pro Audit Sampler", layout="wide")
+st.title("📊 Advanced Audit Sampling & TDS Analytics")
 
-# --- 2. TDS RULES ENGINE ---
-# Thresholds and Section Logic
+# --- 2. TDS LOGIC & THRESHOLDS ---
 TDS_RULES = {
-    '194C': {'name': 'Contractors', 'threshold_single': 30000, 'threshold_agg': 100000, 'keywords': ['contract', 'labor', 'maintenance', 'civil', 'repair']},
-    '194J': {'name': 'Professional/Tech', 'threshold_single': 30000, 'threshold_agg': 30000, 'keywords': ['audit', 'legal', 'consultant', 'technical', 'software']},
-    '194H': {'name': 'Commission/Brokerage', 'threshold_single': 15000, 'threshold_agg': 15000, 'keywords': ['commission', 'brokerage', 'agent']},
-    '194I': {'name': 'Rent', 'threshold_single': 240000, 'threshold_agg': 240000, 'keywords': ['rent', 'lease', 'office rent']}
+    '194C (Contractor)': {'keywords': ['contract', 'labor', 'maintenance', 'civil', 'repair'], 'threshold': 30000},
+    '194J (Professional)': {'keywords': ['audit', 'legal', 'consultant', 'technical', 'professional'], 'threshold': 30000},
+    '194H (Commission)': {'keywords': ['commission', 'brokerage'], 'threshold': 15000},
+    '194I (Rent)': {'keywords': ['rent', 'lease'], 'threshold': 240000},
+    '194Q (Goods)': {'keywords': ['purchase', 'goods', 'raw material'], 'threshold': 5000000}
 }
 
-def identify_tds_section(particulars, amount):
-    part_lower = str(particulars).lower()
+def detect_section(party_name, taxable_val):
+    name = str(party_name).lower()
     for sec, rule in TDS_RULES.items():
-        if any(key in part_lower for key in rule['keywords']):
+        if any(key in name for key in rule['keywords']):
             return sec
-    return "Others/NA"
+    return "Others / Check Manually"
 
-# --- 3. SIDEBAR: SAMPLING CONFIG ---
-st.sidebar.header("📋 Sampling Parameters")
-materiality = st.sidebar.number_input("Enter Materiality Level (₹)", value=50000)
-method = st.sidebar.selectbox("Select Sampling Method", [
-    "Simple Random Sampling", "Systematic Sampling", "Monetary Unit Sampling (MUS)", 
-    "Haphazard Sampling", "Judgmental (High Value)", "Stratified Sampling"
+# --- 3. SIDEBAR: SAMPLING PARAMETERS ---
+st.sidebar.header("🎯 Sampling Configuration")
+
+# Category Selection
+cat_type = st.sidebar.selectbox("Category Group", [
+    "Probability Sampling", "Non-Probability Sampling", 
+    "Audit-Specific Methods", "Advanced / Special Methods"
 ])
 
-# --- 4. DATA UPLOAD & SAMPLE FILE ---
-st.subheader("1. Data Ingestion")
-col1, col2 = st.columns([2, 1])
+# Method Selection based on Category
+methods = {
+    "Probability Sampling": ["Simple Random", "Systematic", "Stratified", "Cluster", "PPS"],
+    "Non-Probability Sampling": ["Convenience", "Judgmental", "Quota", "Haphazard", "Snowball"],
+    "Audit-Specific Methods": ["Statistical", "Non-Statistical", "Monetary Unit Sampling (MUS)", "Block Sampling"],
+    "Advanced / Special Methods": ["Sequential", "Bootstrap", "Bayesian", "Reservoir"]
+}
+selected_method = st.sidebar.selectbox("Specific Method", methods[cat_type])
 
-with col2:
-    # Create a dummy template based on user image
-    template_df = pd.DataFrame(columns=[
-        'Date', 'Particulars', 'Voucher Ref. No.', 'Gross Total', 
-        'Maintenance & Spares', 'Input CGST', 'Input SGST', 'Input IGST', 'Round Off', 'TDS 194C'
-    ])
-    buffer = BytesIO()
-    template_df.to_excel(buffer, index=False)
-    st.download_button("📥 Download Upload Template", buffer.getvalue(), "audit_template.xlsx")
+# Percentage Selection
+sample_pct = st.sidebar.slider("Sample Percentage (%)", 1, 100, 10)
+materiality = st.sidebar.number_input("Materiality Level (Threshold)", value=100000)
 
-uploaded_file = st.file_uploader("Upload your Raw Ledger File (Excel/CSV)", type=['xlsx', 'csv'])
+# --- 4. DATA INGESTION & TEMPLATE ---
+st.subheader("1. Data Upload & Template")
+col_a, col_b = st.columns([3, 1])
+
+with col_b:
+    # UPDATED: Template now includes columns from BOTH images
+    cols = ['Date', 'Party name', 'Invoice no', 'Gross Total', 'taxable value', 
+            'Input CGST', 'Input SGST', 'Input IGST', 'TDS Deducted', 'Round Off']
+    template_df = pd.DataFrame(columns=cols)
+    
+    t_buffer = BytesIO()
+    template_df.to_excel(t_buffer, index=False)
+    st.download_button("📥 Download Excel Template", t_buffer.getvalue(), "audit_template.xlsx")
+
+uploaded_file = st.file_uploader("Upload Raw File", type=['xlsx', 'csv'])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
     
-    # --- 5. TDS CALCULATION ENGINE (CELL BREAKDOWN) ---
-    st.subheader("2. TDS Applicability & Section Breakdown")
-    
-    # Apply logic to create the new "Section" column
-    df['Detected Section'] = df.apply(lambda x: identify_tds_section(x['Particulars'], x['Gross Total']), axis=1)
-    
-    # Check for non-compliance (Threshold reached but TDS is 0)
-    def check_compliance(row):
-        sec = row['Detected Section']
-        if sec in TDS_RULES:
-            if row['Gross Total'] >= TDS_RULES[sec]['threshold_single'] and (row['TDS 194C'] == 0):
-                return "⚠️ Potential Non-Compliance"
-        return "✅ OK"
+    # Fill missing columns if any for stability
+    for col in cols:
+        if col not in df.columns: df[col] = 0
 
-    df['Compliance Status'] = df.apply(check_compliance, axis=1)
+    # --- 5. TDS ANALYSIS (CELL BREAKDOWN) ---
+    df['TDS Section'] = df.apply(lambda x: detect_section(x['Party name'], x['taxable value']), axis=1)
+    df['Compliance'] = np.where((df['taxable value'] > 30000) & (df['TDS Deducted'] == 0), "⚠️ Action Required", "✅ OK")
 
-    # Display Table with Section Breakdown
-    st.dataframe(df[['Date', 'Particulars', 'Gross Total', 'Detected Section', 'TDS 194C', 'Compliance Status']].style.applymap(
-        lambda x: 'background-color: #ffcccc' if x == "⚠️ Potential Non-Compliance" else '', subset=['Compliance Status']
-    ))
+    # --- 6. SAMPLING LOGIC ---
+    num_samples = int(len(df) * (sample_pct / 100))
+    if num_samples < 1: num_samples = 1
 
-    # --- 6. VISUAL ANALYTICS (DASHBOARD) ---
+    if selected_method == "Simple Random":
+        sample_df = df.sample(n=num_samples)
+    elif selected_method == "Judgmental":
+        sample_df = df[df['taxable value'] >= materiality].sort_values(by='taxable value', ascending=False)
+    elif selected_method == "Systematic":
+        step = len(df) // num_samples
+        sample_df = df.iloc[::step] if step > 0 else df
+    else:
+        # Default fallback for complex methods in this demo
+        sample_df = df.sample(n=num_samples)
+
+    # --- 7. DASHBOARD ---
     st.divider()
-    st.subheader("3. Audit Dashboard")
-    d_col1, d_col2 = st.columns(2)
+    st.subheader("2. Dashboard & Visuals")
+    c1, c2, c3 = st.columns(3)
+    
+    with c1:
+        st.metric("Total Vouchers", len(df))
+    with c2:
+        st.metric("Total Taxable Value", f"₹{df['taxable value'].sum():,.2f}")
+    with c3:
+        st.metric("Samples Selected", len(sample_df))
 
-    with d_col1:
+    chart_col1, chart_col2 = st.columns(2)
+    with chart_col1:
         # Party-wise Expenditure
-        party_exp = df.groupby('Particulars')['Gross Total'].sum().sort_values(ascending=False).head(10).reset_index()
-        fig1 = px.bar(party_exp, x='Gross Total', y='Particulars', title="Top 10 Party-wise Expenditure", orientation='h', color='Gross Total')
+        party_data = df.groupby('Party name')['taxable value'].sum().reset_index().sort_values(by='taxable value', ascending=False).head(10)
+        fig1 = px.bar(party_data, x='taxable value', y='Party name', orientation='h', title="Top 10 Parties by Expenditure", color='taxable value')
         st.plotly_chart(fig1, use_container_width=True)
-
-    with d_col2:
-        # Section-wise Breakdown Pie Chart
-        sec_dist = df['Detected Section'].value_counts().reset_index()
-        fig2 = px.pie(sec_dist, values='count', names='Detected Section', title="TDS Section Distribution", hole=0.4)
+    
+    with chart_col2:
+        # TDS Section Breakdown
+        sec_data = df['TDS Section'].value_counts().reset_index()
+        fig2 = px.pie(sec_data, names='TDS Section', values='count', title="TDS Section Distribution", hole=0.3)
         st.plotly_chart(fig2, use_container_width=True)
 
-    # --- 7. SAMPLE OUTPUT GENERATION ---
+    # --- 8. OUTPUT ---
     st.divider()
-    st.subheader("4. Generated Samples for Testing")
-    
-    if method == "Monetary Unit Sampling (MUS)":
-        df['Cum_Sum'] = df['Gross Total'].cumsum()
-        interval = df['Gross Total'].sum() / 10 # Default 10 samples
-        sample_df = df[df['Cum_Sum'] % interval <= (interval * 0.1)].head(10)
-    elif method == "Judgmental (High Value)":
-        sample_df = df[df['Gross Total'] > materiality]
-    else:
-        sample_df = df.sample(frac=0.1 if len(df)>10 else 0.5)
+    st.subheader("3. Sampled Output")
+    st.dataframe(sample_df[['Date', 'Party name', 'Invoice no', 'taxable value', 'TDS Section', 'Compliance']])
 
-    st.write(f"Selected **{len(sample_df)}** samples using **{method}**.")
-    st.table(sample_df[['Voucher Ref. No.', 'Particulars', 'Gross Total', 'Detected Section']])
-
-    # Export Final Audit File
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Full_Analysis', index=False)
-        sample_df.to_excel(writer, sheet_name='Selected_Samples', index=False)
+    # Final Export
+    out_buffer = BytesIO()
+    with pd.ExcelWriter(out_buffer, engine='xlsxwriter') as writer:
+        df.to_excel(writer, sheet_name='Raw_Data_Analysis', index=False)
+        sample_df.to_excel(writer, sheet_name='Sampled_Vouchers', index=False)
     
-    st.download_button("📤 Download Final Audit Report", output.getvalue(), "Audit_Report.xlsx")
+    st.download_button("📤 Download Final Audit Report", out_buffer.getvalue(), "Audit_Report.xlsx")
 
 else:
-    st.info("Please upload a file to begin the analysis.")
+    st.info("Waiting for file upload...")
