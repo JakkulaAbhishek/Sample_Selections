@@ -4,40 +4,62 @@ import numpy as np
 import plotly.express as px
 from io import BytesIO
 
-# --- 1. SETTINGS ---
-st.set_page_config(page_title="CA Audit Analytics", layout="wide")
-st.title("💎 Professional Audit Sampling & TDS Interest Engine")
+# --- 1. STYLISH UI CONFIG ---
+st.set_page_config(page_title="Ultra-Audit Pro", layout="wide", initial_sidebar_state="expanded")
 
-# --- 2. DATA SANITIZATION (Fixes TypeError) ---
+# Custom CSS for a professional look
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
+    .subtotal-box { background-color: #1e3d59; color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("💎 Ultra-Audit Pro: Advanced Sampling & TDS Engine")
+
+# --- 2. ROBUST DATA CLEANING (Fixes TypeError) ---
 def clean_numeric(series):
     if series.dtype == 'object':
-        series = series.str.replace(r'[^\d.]', '', regex=True) #
+        series = series.str.replace(r'[^\d.]', '', regex=True)
     return pd.to_numeric(series, errors='coerce').fillna(0)
 
-# --- 3. SIDEBAR: SAMPLING CONFIGURATION ---
+# --- 3. SIDEBAR: FULL SAMPLING METHODS ---
 st.sidebar.header("🎯 Sampling Settings")
+
+method_categories = {
+    "🔹 Probability Sampling": [
+        "Simple Random Sampling", "Systematic Sampling", "Stratified Sampling", 
+        "Cluster Sampling", "Multistage Sampling", "Multiphase Sampling", 
+        "Area Sampling", "Probability Proportional to Size (PPS) Sampling"
+    ],
+    "🔹 Non-Probability Sampling": [
+        "Convenience Sampling", "Judgmental Sampling", "Purposive Sampling", 
+        "Quota Sampling", "Snowball Sampling", "Volunteer Sampling", 
+        "Haphazard Sampling", "Consecutive Sampling"
+    ],
+    "🔹 Audit-Specific Sampling": [
+        "Statistical Sampling", "Non-Statistical Sampling", 
+        "Monetary Unit Sampling (MUS)", "Block Sampling"
+    ],
+    "🔹 Advanced / Special Methods": [
+        "Sequential Sampling", "Adaptive Sampling", "Reservoir Sampling", 
+        "Acceptance Sampling", "Bootstrap Sampling", "Bayesian Sampling"
+    ]
+}
+
+selected_cats = st.sidebar.multiselect("Select Method Categories", list(method_categories.keys()), default=["🔹 Audit-Specific Sampling"])
+
+available_methods = []
+for cat in selected_cats:
+    available_methods.extend(method_categories[cat])
+
+primary_methods = st.sidebar.multiselect("Choose Basis for Selection", options=available_methods, default=[available_methods[0]] if available_methods else [])
 sample_pct = st.sidebar.slider("Sample Selection %", 1, 100, 20)
 
-selected_categories = st.sidebar.multiselect(
-    "Select Method Categories",
-    ["Probability", "Non-Probability", "Audit-Specific", "Advanced"],
-    default=["Probability", "Audit-Specific"]
-)
-
-method_list = ["Simple Random", "Systematic", "Judgmental (High Value)", "Monetary Unit Sampling (MUS)"]
-primary_methods = st.sidebar.multiselect("Choose Basis for Selection", options=method_list, default=["Judgmental (High Value)"])
-
-# --- 4. TEMPLATE & UPLOAD (Headers from) ---
-headers = ['Date', 'Party name', 'Invoice no', 'Gross Total', 'taxable value', 
-           'Input CGST', 'Input SGST', 'Input IGST', 'TDS deducted', 'TDS Section'] #
-
-col_tmp, col_up = st.columns([1, 2])
-with col_tmp:
-    tmp_df = pd.DataFrame(columns=headers)
-    t_buffer = BytesIO()
-    # Uses xlsxwriter to ensure no ModuleNotFoundError
-    tmp_df.to_excel(t_buffer, index=False, engine='xlsxwriter') #
-    st.download_button("📥 Download Pro Template", t_buffer.getvalue(), "audit_pro_template.xlsx")
+# --- 4. DATA INGESTION ---
+# Headers from your template
+headers = ['Date', 'Party name', 'Invoice no', 'Gross Total', 'taxable value', 'Input CGST', 'Input SGST', 'Input IGST', 'TDS deducted', 'TDS Section']
 
 uploaded_file = st.file_uploader("Upload Raw Ledger", type=['xlsx', 'csv'])
 
@@ -45,102 +67,76 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
     
     # Pre-processing
-    num_cols = ['Gross Total', 'taxable value', 'TDS deducted']
+    num_cols = ['Gross Total', 'taxable value', 'TDS deducted', 'Input CGST', 'Input SGST', 'Input IGST']
     for col in num_cols:
         if col in df.columns: df[col] = clean_numeric(df[col])
     
-    if 'TDS Section' not in df.columns: df['TDS Section'] = "Not Specified"
+    if 'TDS Section' not in df.columns: df['TDS Section'] = "NA"
 
     # --- 5. EXECUTE SAMPLING ---
     n = max(1, int(len(df) * (sample_pct / 100)))
     sample_df = pd.DataFrame()
-
     for method in primary_methods:
-        if method == "Simple Random":
-            s = df.sample(n=min(n, len(df)))
-        elif method == "Judgmental (High Value)":
-            s = df.nlargest(n, 'taxable value')
-        elif method == "Systematic":
-            k = max(1, len(df) // n)
-            s = df.iloc[::k]
-        else:
-            s = df.sample(n=min(n, len(df)))
-        
+        if method == "Judgmental Sampling": s = df.nlargest(n, 'taxable value')
+        elif method == "Systematic Sampling": s = df.iloc[::max(1, len(df)//n)]
+        else: s = df.sample(n=min(n, len(df)))
         s['Basis for Selection'] = method
         sample_df = pd.concat([sample_df, s]).drop_duplicates(subset=['Invoice no', 'Party name'])
 
-    # --- 6. ADVANCED TDS & INTEREST CALCULATOR ---
-    # Section Rates Formula
+    # --- 6. TDS & DASHBOARD CALCULATIONS ---
     rates = {'194C': 0.01, '194J': 0.10, '194I': 0.10, '194H': 0.05, '194Q': 0.001}
-    
-    tds_summary = df.groupby(['Party name', 'TDS Section']).agg({
-        'taxable value': 'sum',
-        'TDS deducted': 'sum'
-    }).reset_index()
+    tds_summary = df.groupby(['Party name', 'TDS Section']).agg({'taxable value': 'sum', 'TDS deducted': 'sum'}).reset_index()
+    tds_summary['TDS Needs to be Deducted'] = tds_summary.apply(lambda r: r['taxable value'] * rates.get(str(r['TDS Section']).upper(), 0), axis=1)
+    tds_summary['Shortfall'] = np.maximum(0, tds_summary['TDS Needs to be Deducted'] - tds_summary['TDS deducted'])
+    tds_summary['Interest (1.5% pm)'] = tds_summary['Shortfall'] * 0.015 * 3
 
-    def calc_tds(row):
-        section = str(row['TDS Section']).upper()
-        # FORMULA: Taxable Value * Section Rate
-        return row['taxable value'] * rates.get(section, 0)
+    # Audit Coverage Data
+    raw_totals = df.groupby('Party name')['taxable value'].sum().reset_index().rename(columns={'taxable value': 'Raw File Total'})
+    samp_totals = sample_df.groupby('Party name')['taxable value'].sum().reset_index().rename(columns={'taxable value': 'Sampled Value'})
+    dashboard_df = raw_totals.merge(samp_totals, on='Party name', how='left').fillna(0)
+    dashboard_df['% Sample Selection'] = (dashboard_df['Sampled Value'] / dashboard_df['Raw File Total']) * 100
 
-    tds_summary['TDS Needs to be Deducted'] = tds_summary.apply(calc_tds, axis=1)
-    tds_summary['Shortfall (Less Deducted)'] = np.maximum(0, tds_summary['TDS Needs to be Deducted'] - tds_summary['TDS deducted'])
-    
-    tds_summary['Interest on Late Payment (1.5% pm)'] = tds_summary['Shortfall (Less Deducted)'] * 0.015 * 3
-    tds_summary['Total Payable with Interest'] = tds_summary['Shortfall (Less Deducted)'] + tds_summary['Interest on Late Payment (1.5% pm)']
-
-    # --- 7. AUDIT DASHBOARD DATA ---
-    coverage_summary = df.groupby('Party name')['taxable value'].sum().reset_index()
-    coverage_summary.columns = ['Party name', 'Raw File Total Value']
-    
-    sampled_totals = sample_df.groupby('Party name')['taxable value'].sum().reset_index()
-    sampled_totals.columns = ['Party name', 'Sampled Value']
-    
-    coverage_summary = coverage_summary.merge(sampled_totals, on='Party name', how='left').fillna(0)
-    # Selection Percentage Calculation
-    coverage_summary['% Sample Selection'] = (coverage_summary['Sampled Value'] / coverage_summary['Raw File Total Value']) * 100
-    coverage_summary['Selection Basis'] = ", ".join(primary_methods)
-
-    # --- 8. UI & EXCEL EXPORT ---
-    st.divider()
-    st.subheader("📋 TDS Interest & Applicability Report")
-    st.dataframe(tds_summary.style.format(precision=2))
-
+    # --- 7. EXCEL EXPORT (Fixes ModuleNotFoundError) ---
     out_bio = BytesIO()
-    with pd.ExcelWriter(out_bio, engine='xlsxwriter') as writer:
-        workbook = writer.book
+    try:
+        with pd.ExcelWriter(out_bio, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            header_format = workbook.add_format({'bold': True, 'bg_color': '#1e3d59', 'font_color': 'white', 'border': 1})
+            num_format = workbook.add_format({'num_format': '#,##0.00'})
 
-        # Define Sheets to include Subtotals at Top and Pie Charts
-        sheet_data = {
-            'Audit Dashboard': coverage_summary,
-            'Selected Samples': sample_df,
-            'TDS Applicability': tds_summary
-        }
+            sheet_map = {
+                'Audit Dashboard': dashboard_df,
+                'TDS Applicability': tds_summary,
+                'Selected Samples': sample_df
+            }
 
-        for sheet_name, data in sheet_data.items():
-            # Write Subtotals at the Top (Row 0)
-            if not data.empty:
-                # Calculate numeric totals only
-                numeric_only = data.select_dtypes(include=[np.number]).sum()
-                subtotal_row = pd.DataFrame([["SUBTOTALS"] + [""] * (data.shape[1]-1)], columns=data.columns)
-                for col in numeric_only.index:
-                    subtotal_row[col] = numeric_only[col]
-                
-                subtotal_row.to_excel(writer, sheet_name=sheet_name, index=False, startrow=0)
-                data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=2)
-
-                # Add Pie Chart to every sheet
+            for sheet_name, data in sheet_map.items():
+                # Single Heading Approach (Row 0 is Subtotals, Row 1 is Data Headers)
+                data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1)
                 ws = writer.sheets[sheet_name]
-                pie_chart = workbook.add_chart({'type': 'pie'})
-                # Points to the first numeric column for distribution
-                pie_chart.add_series({
-                    'name': f'{sheet_name} Distribution',
-                    'categories': f"='{sheet_name}'!$A$4:$A$13",
-                    'values': f"='{sheet_name}'!$B$4:$B$13",
-                })
-                ws.insert_chart('K2', pie_chart)
+                
+                # Top Subtotals (Dynamic Formulas)
+                for i, col in enumerate(data.columns):
+                    ws.write(1, i, col, header_format)
+                    if data[col].dtype in [np.float64, np.int64]:
+                        ws.write_formula(0, i, f"=SUM({xlsxwriter.utility.xl_col_to_name(i)}3:{xlsxwriter.utility.xl_col_to_name(i)}{len(data)+2})", num_format)
+                
+                ws.write(0, 0, "SUBTOTALS (AUTO)", header_format)
 
-    st.download_button("📤 Download Final Multi-Sheet Audit Report", out_bio.getvalue(), "Final_Audit_Report.xlsx")
+                # Add Stylish Pie Chart to every sheet
+                chart = workbook.add_chart({'type': 'pie'})
+                chart.add_series({
+                    'name': f'{sheet_name} Distribution',
+                    'categories': f"='{sheet_name}'!$A$3:$A$12",
+                    'values': f"='{sheet_name}'!$B$3:$B$12",
+                })
+                chart.set_style(10)
+                ws.insert_chart('K2', chart)
+
+        st.success("✨ Ultra-Stylish Audit Report Generated!")
+        st.download_button("📤 Download Multi-Sheet Audit Report", out_bio.getvalue(), "Pro_Audit_Report.xlsx")
+    except NameError:
+        st.error("Error: Please ensure 'xlsxwriter' is added to your requirements.txt file.")
 
 else:
-    st.info("Awaiting file upload...")
+    st.info("👋 Welcome! Please upload your ledger to begin the Ultra-Audit process.")
