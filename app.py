@@ -3,215 +3,156 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 from io import BytesIO
-import xlsxwriter
 
-# ---------------------------------------------------
-# 1️⃣ PAGE CONFIG
-# ---------------------------------------------------
-st.set_page_config(
-    page_title="Ultra-Audit Pro | Materiality Engine",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# --- 1. STYLISH UI CONFIG ---
+st.set_page_config(page_title="Ultra-Audit Pro", layout="wide", initial_sidebar_state="expanded")
 
-# ---------------------------------------------------
-# 2️⃣ PREMIUM UI
-# ---------------------------------------------------
+# Custom CSS for a professional look
 st.markdown("""
-<style>
-.main {background: linear-gradient(to right, #f8f9fa, #eef2f7);}
-.stMetric {
-    background: white;
-    padding: 18px;
-    border-radius: 12px;
-    border-left: 5px solid #1e3d59;
-}
-.materiality-box {
-    background-color: #1e3d59;
-    color: white;
-    padding: 18px;
-    border-radius: 12px;
-    font-size: 18px;
-}
-.highrisk {
-    background-color: #ffe6e6;
-}
-</style>
+    <style>
+    .main { background-color: #f8f9fa; }
+    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; border: 1px solid #e0e0e0; }
+    .subtotal-box { background-color: #1e3d59; color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; }
+    .materiality-box { background-color: #ff6f61; color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; font-weight: bold; }
+    </style>
 """, unsafe_allow_html=True)
 
-st.title("💎 Ultra-Audit Pro – Advanced Sampling + Materiality Engine")
+st.title("💎 Ultra-Audit Pro: Advanced Sampling, TDS & Materiality Engine")
 
-# ---------------------------------------------------
-# 3️⃣ CLEAN NUMERIC FUNCTION
-# ---------------------------------------------------
+# --- 2. ROBUST DATA CLEANING ---
 def clean_numeric(series):
     if series.dtype == 'object':
         series = series.str.replace(r'[^\d.]', '', regex=True)
     return pd.to_numeric(series, errors='coerce').fillna(0)
 
-# ---------------------------------------------------
-# 4️⃣ SIDEBAR – SAMPLING + MATERIALITY
-# ---------------------------------------------------
-st.sidebar.header("🎯 Audit Controls")
+# --- 3. SIDEBAR: FULL SAMPLING METHODS ---
+st.sidebar.header("🎯 Sampling Settings")
 
-materiality_base = st.sidebar.selectbox(
-    "Materiality Base",
-    ["Total Revenue", "Total Taxable Value", "Gross Total"]
-)
+method_categories = {
+    "🔹 Probability Sampling": [
+        "Simple Random Sampling", "Systematic Sampling", "Stratified Sampling", 
+        "Cluster Sampling", "Multistage Sampling", "Multiphase Sampling", 
+        "Area Sampling", "Probability Proportional to Size (PPS) Sampling"
+    ],
+    "🔹 Non-Probability Sampling": [
+        "Convenience Sampling", "Judgmental Sampling", "Purposive Sampling", 
+        "Quota Sampling", "Snowball Sampling", "Volunteer Sampling", 
+        "Haphazard Sampling", "Consecutive Sampling"
+    ],
+    "🔹 Audit-Specific Sampling": [
+        "Statistical Sampling", "Non-Statistical Sampling", 
+        "Monetary Unit Sampling (MUS)", "Block Sampling"
+    ],
+    "🔹 Advanced / Special Methods": [
+        "Sequential Sampling", "Adaptive Sampling", "Reservoir Sampling", 
+        "Acceptance Sampling", "Bootstrap Sampling", "Bayesian Sampling"
+    ]
+}
 
-materiality_pct = st.sidebar.slider("Overall Materiality %", 0.5, 10.0, 5.0)
+selected_cats = st.sidebar.multiselect("Select Method Categories", list(method_categories.keys()), default=["🔹 Audit-Specific Sampling"])
 
-performance_pct = st.sidebar.slider("Performance Materiality % of OM", 40, 90, 75)
+available_methods = []
+for cat in selected_cats:
+    available_methods.extend(method_categories[cat])
 
-sample_pct = st.sidebar.slider("Sample % (Base Selection)", 1, 100, 20)
+primary_methods = st.sidebar.multiselect("Choose Basis for Selection", options=available_methods, default=[available_methods[0]] if available_methods else [])
+sample_pct = st.sidebar.slider("Sample Selection %", 1, 100, 20)
 
-sampling_method = st.sidebar.selectbox(
-    "Sampling Method",
-    ["Simple Random Sampling",
-     "Systematic Sampling",
-     "Judgmental Sampling (High Value)",
-     "Monetary Unit Sampling (MUS)"]
-)
+# --- 4. MATERIALITY SETTINGS ---
+st.sidebar.header("📊 Materiality Settings")
+materiality_pct = st.sidebar.slider("Materiality Threshold (%)", 0.5, 10.0, 2.0)
 
-# ---------------------------------------------------
-# 5️⃣ FILE UPLOAD
-# ---------------------------------------------------
-headers = ['Date', 'Party name', 'Invoice no', 'Gross Total',
-           'taxable value', 'Input CGST', 'Input SGST',
-           'Input IGST', 'TDS deducted', 'TDS Section']
+# --- 5. DATA INGESTION ---
+headers = ['Date', 'Party name', 'Invoice no', 'Gross Total', 'taxable value', 'Input CGST', 'Input SGST', 'Input IGST', 'TDS deducted', 'TDS Section']
 
-uploaded_file = st.file_uploader("📂 Upload Ledger (Excel/CSV)", type=['xlsx', 'csv'])
+uploaded_file = st.file_uploader("Upload Raw Ledger", type=['xlsx', 'csv'])
 
 if uploaded_file:
-
     df = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
-
-    num_cols = ['Gross Total', 'taxable value', 'TDS deducted',
-                'Input CGST', 'Input SGST', 'Input IGST']
-
+    
+    # Pre-processing
+    num_cols = ['Gross Total', 'taxable value', 'TDS deducted', 'Input CGST', 'Input SGST', 'Input IGST']
     for col in num_cols:
-        if col in df.columns:
-            df[col] = clean_numeric(df[col])
+        if col in df.columns: df[col] = clean_numeric(df[col])
+    
+    if 'TDS Section' not in df.columns: df['TDS Section'] = "NA"
 
-    # ---------------------------------------------------
-    # 6️⃣ MATERIALITY CALCULATION
-    # ---------------------------------------------------
-    if materiality_base == "Total Revenue":
-        base_value = df['Gross Total'].sum()
-    elif materiality_base == "Total Taxable Value":
-        base_value = df['taxable value'].sum()
-    else:
-        base_value = df['Gross Total'].sum()
+    # --- 6. EXECUTE SAMPLING ---
+    n = max(1, int(len(df) * (sample_pct / 100)))
+    sample_df = pd.DataFrame()
+    for method in primary_methods:
+        if method == "Judgmental Sampling": s = df.nlargest(n, 'taxable value')
+        elif method == "Systematic Sampling": s = df.iloc[::max(1, len(df)//n)]
+        else: s = df.sample(n=min(n, len(df)))
+        s['Basis for Selection'] = method
+        sample_df = pd.concat([sample_df, s]).drop_duplicates(subset=['Invoice no', 'Party name'])
 
-    overall_materiality = base_value * (materiality_pct / 100)
-    performance_materiality = overall_materiality * (performance_pct / 100)
+    # --- 7. TDS & DASHBOARD CALCULATIONS ---
+    rates = {'194C': 0.01, '194J': 0.10, '194I': 0.10, '194H': 0.05, '194Q': 0.001}
+    tds_summary = df.groupby(['Party name', 'TDS Section']).agg({'taxable value': 'sum', 'TDS deducted': 'sum'}).reset_index()
+    tds_summary['TDS Needs to be Deducted'] = tds_summary.apply(lambda r: r['taxable value'] * rates.get(str(r['TDS Section']).upper(), 0), axis=1)
+    tds_summary['Shortfall'] = np.maximum(0, tds_summary['TDS Needs to be Deducted'] - tds_summary['TDS deducted'])
+    tds_summary['Interest (1.5% pm)'] = tds_summary['Shortfall'] * 0.015 * 3
+
+    # Audit Coverage Data
+    raw_totals = df.groupby('Party name')['taxable value'].sum().reset_index().rename(columns={'taxable value': 'Raw File Total'})
+    samp_totals = sample_df.groupby('Party name')['taxable value'].sum().reset_index().rename(columns={'taxable value': 'Sampled Value'})
+    dashboard_df = raw_totals.merge(samp_totals, on='Party name', how='left').fillna(0)
+    dashboard_df['% Sample Selection'] = (dashboard_df['Sampled Value'] / dashboard_df['Raw File Total']) * 100
+
+    # --- 8. MATERIALITY CALCULATION ---
+    overall_total = df['taxable value'].sum()
+    materiality_threshold = overall_total * (materiality_pct / 100)
+    materiality_df = df[df['taxable value'] >= materiality_threshold].copy()
+    materiality_df['Materiality Flag'] = "Above Threshold"
 
     st.markdown(f"""
-    <div class="materiality-box">
-    📊 Overall Materiality: ₹ {overall_materiality:,.2f} <br>
-    🔎 Performance Materiality: ₹ {performance_materiality:,.2f}
-    </div>
+        <div class="materiality-box">
+        Materiality Threshold: {materiality_pct}% of total = {materiality_threshold:,.2f}  
+        Transactions above threshold: {len(materiality_df)}
+        </div>
     """, unsafe_allow_html=True)
 
-    # Flag high risk
-    df['High Risk (Above PM)'] = df['taxable value'] >= performance_materiality
+    # --- 9. EXCEL EXPORT ---
+    out_bio = BytesIO()
+    try:
+        import xlsxwriter
+        with pd.ExcelWriter(out_bio, engine='xlsxwriter') as writer:
+            workbook = writer.book
+            header_format = workbook.add_format({'bold': True, 'bg_color': '#1e3d59', 'font_color': 'white', 'border': 1})
+            num_format = workbook.add_format({'num_format': '#,##0.00'})
 
-    # ---------------------------------------------------
-    # 7️⃣ SAMPLING LOGIC
-    # ---------------------------------------------------
-    n = max(1, int(len(df) * sample_pct / 100))
+            sheet_map = {
+                'Audit Dashboard': dashboard_df,
+                'TDS Applicability': tds_summary,
+                'Selected Samples': sample_df,
+                'Materiality Analysis': materiality_df
+            }
 
-    if sampling_method == "Simple Random Sampling":
-        sample_df = df.sample(n=min(n, len(df)))
+            for sheet_name, data in sheet_map.items():
+                data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1)
+                ws = writer.sheets[sheet_name]
+                
+                for i, col in enumerate(data.columns):
+                    ws.write(1, i, col, header_format)
+                    if data[col].dtype in [np.float64, np.int64]:
+                        ws.write_formula(0, i, f"=SUM({xlsxwriter.utility.xl_col_to_name(i)}3:{xlsxwriter.utility.xl_col_to_name(i)}{len(data)+2})", num_format)
+                
+                ws.write(0, 0, "SUBTOTALS (AUTO)", header_format)
 
-    elif sampling_method == "Systematic Sampling":
-        step = max(1, len(df)//n)
-        sample_df = df.iloc[::step]
+                chart = workbook.add_chart({'type': 'pie'})
+                chart.add_series({
+                    'name': f'{sheet_name} Distribution',
+                    'categories': f"='{sheet_name}'!$A$3:$A$12",
+                    'values': f"='{sheet_name}'!$B$3:$B$12",
+                })
+                chart.set_style(10)
+                ws.insert_chart('K2', chart)
 
-    elif sampling_method == "Judgmental Sampling (High Value)":
-        sample_df = df.nlargest(n, 'taxable value')
-
-    elif sampling_method == "Monetary Unit Sampling (MUS)":
-        df_sorted = df.sort_values('taxable value', ascending=False)
-        sample_df = df_sorted.head(n)
-
-    # Add mandatory high-risk items
-    high_risk_df = df[df['High Risk (Above PM)']]
-    sample_df = pd.concat([sample_df, high_risk_df]).drop_duplicates()
-
-    # ---------------------------------------------------
-    # 8️⃣ TDS ENGINE
-    # ---------------------------------------------------
-    rates = {'194C': 0.01, '194J': 0.10, '194I': 0.10,
-             '194H': 0.05, '194Q': 0.001}
-
-    df['Expected TDS'] = df.apply(
-        lambda r: r['taxable value'] * rates.get(str(r['TDS Section']).upper(), 0),
-        axis=1
-    )
-
-    df['Shortfall'] = np.maximum(0, df['Expected TDS'] - df['TDS deducted'])
-    df['Interest (3 months @1.5%)'] = df['Shortfall'] * 0.015 * 3
-
-    # ---------------------------------------------------
-    # 9️⃣ DASHBOARD
-    # ---------------------------------------------------
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Total Transactions", len(df))
-    col2.metric("Selected Samples", len(sample_df))
-    col3.metric("High Risk Transactions", df['High Risk (Above PM)'].sum())
-
-    fig = px.pie(
-        names=["Sampled", "Remaining"],
-        values=[len(sample_df), len(df)-len(sample_df)],
-        title="Sampling Coverage"
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-    # Highlight high risk
-    st.subheader("📋 Sampled Transactions")
-    st.dataframe(sample_df.style.apply(
-        lambda x: ['background-color: #ffe6e6' if x['High Risk (Above PM)'] else '' for _ in x],
-        axis=1
-    ))
-
-    # ---------------------------------------------------
-    # 🔟 EXCEL EXPORT
-    # ---------------------------------------------------
-    output = BytesIO()
-
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-
-        df.to_excel(writer, sheet_name='Full Data', index=False)
-        sample_df.to_excel(writer, sheet_name='Sampled Data', index=False)
-
-        materiality_df = pd.DataFrame({
-            "Base Value": [base_value],
-            "Overall Materiality": [overall_materiality],
-            "Performance Materiality": [performance_materiality]
-        })
-
-        materiality_df.to_excel(writer, sheet_name='Materiality', index=False)
-
-        workbook = writer.book
-        chart = workbook.add_chart({'type': 'column'})
-
-        chart.add_series({
-            'name': 'Shortfall',
-            'categories': ['Full Data', 1, 1, len(df), 1],
-            'values': ['Full Data', 1, df.columns.get_loc('Shortfall'),
-                       len(df), df.columns.get_loc('Shortfall')],
-        })
-
-        worksheet = writer.sheets['Full Data']
-        worksheet.insert_chart('L2', chart)
-
-    st.download_button(
-        "📥 Download Ultra Audit Report",
-        output.getvalue(),
-        file_name="Ultra_Audit_With_Materiality.xlsx"
-    )
+        st.success("✨ Ultra-Stylish Audit Report Generated with Materiality!")
+        st.download_button("📤 Download Multi-Sheet Audit Report", out_bio.getvalue(), "Pro_Audit_Report.xlsx")
+    except NameError:
+        st.error("Error: Please ensure 'xlsxwriter' is added to your requirements.txt file.")
 
 else:
-    st.info("👋 Upload your ledger to activate the Audit Engine.")
+    st.info("👋 Welcome! Please upload your ledger to begin the Ultra-Audit process.")
