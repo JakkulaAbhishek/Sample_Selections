@@ -9,188 +9,269 @@ from io import BytesIO
 from datetime import datetime, timedelta
 import calendar
 import warnings
+import base64
 warnings.filterwarnings('ignore')
 
-# --- 1. ADVANCED UI CONFIGURATION ---
+# --- 1. PAGE CONFIG ---
 st.set_page_config(
-    page_title="Ultra-Audit Pro | Enterprise Edition",
+    page_title="Ultra-Audit Pro | by Jakkula Abhishek",
     page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- 2. PREMIUM CUSTOM CSS ---
+# --- 2. CUSTOM CSS WITH ULTRA-STYLISH DESIGN ---
 st.markdown("""
-    <style>
-    /* Global Styles */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+<style>
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
     
+    /* Global Styles with Cyberpunk Theme */
     .main {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        font-family: 'Inter', sans-serif;
+        background: linear-gradient(135deg, #0a0f1e 0%, #1a1f35 100%);
+        font-family: 'Rajdhani', sans-serif;
     }
     
-    /* Premium Header */
-    .premium-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 2rem;
-        border-radius: 20px;
-        color: white;
+    /* Animated Gradient Header */
+    .cyber-header {
+        background: linear-gradient(270deg, #00ff87, #60efff, #0061ff, #ff00ff);
+        background-size: 300% 300%;
+        animation: gradientShift 10s ease infinite;
+        padding: 2.5rem;
+        border-radius: 30px;
         margin-bottom: 2rem;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-        animation: slideIn 0.5s ease-out;
+        box-shadow: 0 20px 40px rgba(0,255,135,0.3);
+        border: 2px solid rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+    }
+    
+    @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+    }
+    
+    /* Glassmorphism Cards */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 1.5rem;
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+        transition: all 0.3s ease;
+    }
+    
+    .glass-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 45px 0 rgba(0,255,135,0.3);
+        border: 1px solid #00ff87;
+    }
+    
+    /* Neon Text Effects */
+    .neon-text {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 3rem;
+        font-weight: 900;
+        text-shadow: 0 0 10px #00ff87, 0 0 20px #00ff87, 0 0 40px #00ff87;
+        color: white;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { text-shadow: 0 0 10px #00ff87, 0 0 20px #00ff87; }
+        50% { text-shadow: 0 0 20px #00ff87, 0 0 40px #00ff87, 0 0 60px #00ff87; }
+        100% { text-shadow: 0 0 10px #00ff87, 0 0 20px #00ff87; }
+    }
+    
+    /* Developer Signature */
+    .developer-signature {
+        font-family: 'Orbitron', sans-serif;
+        background: linear-gradient(90deg, #00ff87, #60efff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-size: 1.2rem;
+        font-weight: 700;
+        text-align: right;
+        padding: 10px;
+        border-right: 3px solid #00ff87;
+        animation: slideIn 1s ease;
     }
     
     @keyframes slideIn {
-        from { transform: translateY(-20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
+        from { transform: translateX(100px); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
     }
     
-    /* Metric Cards */
-    .metric-card {
-        background: white;
-        padding: 1.5rem;
+    /* Metric Cards with Glow */
+    .metric-card-ultra {
+        background: rgba(0, 255, 135, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid #00ff87;
         border-radius: 15px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        padding: 1.2rem;
+        text-align: center;
         transition: all 0.3s ease;
-        border-left: 5px solid #667eea;
-        margin-bottom: 1rem;
+        box-shadow: 0 0 20px rgba(0,255,135,0.3);
     }
     
-    .metric-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 15px 40px rgba(102, 126, 234, 0.2);
-    }
-    
-    /* Materiality Badges */
-    .badge-high {
-        background: linear-gradient(135deg, #f43b47 0%, #453a94 100%);
-        color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 12px;
-        display: inline-block;
-    }
-    
-    .badge-medium {
-        background: linear-gradient(135deg, #f9d423 0%, #f83600 100%);
-        color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 12px;
-        display: inline-block;
-    }
-    
-    .badge-low {
-        background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
-        color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
-        font-weight: 600;
-        font-size: 12px;
-        display: inline-block;
-    }
-    
-    /* Progress Bar */
-    .progress-container {
-        background: #e0e0e0;
-        border-radius: 10px;
-        height: 10px;
-        margin: 10px 0;
-    }
-    
-    .progress-bar {
-        background: linear-gradient(90deg, #667eea, #764ba2);
-        border-radius: 10px;
-        height: 10px;
-        transition: width 0.5s ease;
-    }
-    
-    /* Custom Button */
-    .custom-button {
-        background: linear-gradient(90deg, #667eea, #764ba2);
-        color: white;
-        padding: 12px 30px;
-        border-radius: 25px;
-        border: none;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-block;
-    }
-    
-    .custom-button:hover {
+    .metric-card-ultra:hover {
         transform: scale(1.05);
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        box-shadow: 0 0 40px rgba(0,255,135,0.6);
     }
     
-    /* Tab Styling */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 20px;
-        background: white;
-        padding: 10px;
+    /* Cyberpunk Buttons */
+    .cyber-button {
+        background: transparent;
+        border: 2px solid #00ff87;
+        color: #00ff87;
+        padding: 12px 30px;
+        border-radius: 10px;
+        font-family: 'Orbitron', sans-serif;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    
+    .cyber-button:hover {
+        background: #00ff87;
+        color: #0a0f1e;
+        box-shadow: 0 0 30px #00ff87;
+    }
+    
+    .cyber-button::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+        transition: left 0.5s;
+    }
+    
+    .cyber-button:hover::before {
+        left: 100%;
+    }
+    
+    /* Party Cards */
+    .party-card {
+        background: linear-gradient(135deg, rgba(0,255,135,0.1), rgba(96,239,255,0.1));
+        border: 1px solid #60efff;
         border-radius: 15px;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+        padding: 1rem;
+        margin: 0.5rem 0;
+        transition: all 0.3s;
+    }
+    
+    .party-card:hover {
+        background: linear-gradient(135deg, rgba(0,255,135,0.3), rgba(96,239,255,0.3));
+        transform: translateX(10px);
+        border-color: #00ff87;
+    }
+    
+    /* Tabs Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        background: rgba(255,255,255,0.05);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 5px;
+        gap: 5px;
     }
     
     .stTabs [data-baseweb="tab"] {
         background: transparent;
+        color: white;
+        font-family: 'Orbitron', sans-serif;
         border-radius: 10px;
         padding: 10px 25px;
-        font-weight: 600;
-        color: #666;
+        transition: all 0.3s;
     }
     
     .stTabs [aria-selected="true"] {
-        background: linear-gradient(90deg, #667eea, #764ba2);
-        color: white;
+        background: #00ff87 !important;
+        color: #0a0f1e !important;
+        font-weight: 700;
     }
     
-    /* Info Box */
-    .info-box {
-        background: white;
-        padding: 20px;
-        border-radius: 15px;
-        border-left: 5px solid #667eea;
-        margin: 10px 0;
-        box-shadow: 0 5px 20px rgba(0,0,0,0.05);
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+        width: 10px;
+        background: #0a0f1e;
     }
     
-    /* Tooltip */
-    .tooltip {
-        position: relative;
-        display: inline-block;
-        cursor: help;
+    ::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, #00ff87, #60efff);
+        border-radius: 5px;
     }
     
-    .tooltip .tooltiptext {
-        visibility: hidden;
-        width: 200px;
-        background: #333;
-        color: white;
-        text-align: center;
-        border-radius: 6px;
-        padding: 5px;
-        position: absolute;
-        z-index: 1;
-        bottom: 125%;
-        left: 50%;
-        margin-left: -100px;
-        opacity: 0;
-        transition: opacity 0.3s;
+    /* Data Table Styling */
+    .dataframe {
+        background: rgba(255,255,255,0.05) !important;
+        border-radius: 15px !important;
+        border: 1px solid #00ff87 !important;
     }
     
-    .tooltip:hover .tooltiptext {
-        visibility: visible;
-        opacity: 1;
+    /* Animated Background */
+    .animated-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at 50% 50%, #1a1f35, #0a0f1e);
+        z-index: -1;
+        animation: backgroundPulse 10s infinite;
     }
-    </style>
+    
+    @keyframes backgroundPulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.8; }
+        100% { opacity: 1; }
+    }
+</style>
+
+<div class="animated-bg"></div>
 """, unsafe_allow_html=True)
 
-# --- 3. ADVANCED DATA PROCESSING ENGINE ---
+# --- 3. DEVELOPER ATTRIBUTION ---
+st.markdown("""
+<div class="developer-signature">
+    ⚡ Developed by: JAKKULA ABHISHEK | 📧 jakkulaabhishek5@gmail.com ⚡
+</div>
+""", unsafe_allow_html=True)
+
+# --- 4. CYBERPUNK HEADER ---
+st.markdown("""
+<div class="cyber-header">
+    <h1 style="font-family: 'Orbitron', sans-serif; font-size: 4rem; margin:0; color: white; text-align: center;">
+        ⚡ ULTRA-AUDIT PRO ⚡
+    </h1>
+    <p style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; text-align: center; color: rgba(255,255,255,0.9); margin-top: 10px;">
+        Next-Gen AI-Powered Audit Intelligence | Materiality Analysis | TDS Compliance
+    </p>
+    <div style="display: flex; justify-content: center; gap: 20px; margin-top: 30px;">
+        <span style="background: rgba(255,255,255,0.1); padding: 10px 25px; border-radius: 30px; border: 1px solid #00ff87;">
+            🔥 CRITICAL
+        </span>
+        <span style="background: rgba(255,255,255,0.1); padding: 10px 25px; border-radius: 30px; border: 1px solid #60efff;">
+            ⚡ HIGH
+        </span>
+        <span style="background: rgba(255,255,255,0.1); padding: 10px 25px; border-radius: 30px; border: 1px solid #0061ff;">
+            💫 MEDIUM
+        </span>
+        <span style="background: rgba(255,255,255,0.1); padding: 10px 25px; border-radius: 30px; border: 1px solid #ff00ff;">
+            🌟 LOW
+        </span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# --- 5. DATA PROCESSING ENGINE WITH FORMULAS ---
 class DataProcessor:
     """Advanced data processing with AI-powered column detection"""
     
@@ -198,7 +279,6 @@ class DataProcessor:
     def clean_numeric(series):
         """Intelligent numeric cleaning"""
         if series.dtype == 'object':
-            # Remove all non-numeric characters except decimal and minus
             series = series.astype(str).str.replace(r'[^\d.-]', '', regex=True)
             series = series.replace('', '0')
             series = series.replace('nan', '0')
@@ -207,337 +287,208 @@ class DataProcessor:
     
     @staticmethod
     def detect_columns(df):
-        """AI-powered column detection with fuzzy matching"""
-        
-        # Comprehensive column mapping dictionary
+        """AI-powered column detection"""
         column_patterns = {
-            'date': ['date', 'transaction date', 'entry date', 'dt', 'trans date', 'posting date', 'voucher date'],
-            'party': ['party name', 'party', 'vendor', 'supplier', 'customer', 'name', 'party_name', 'creditor', 'debtor', 'account'],
-            'invoice': ['invoice no', 'invoice', 'inv no', 'invoice number', 'inv_no', 'voucher no', 'bill no', 'reference', 'doc no'],
-            'gross': ['gross total', 'gross', 'total amount', 'bill amount', 'invoice amount', 'amount', 'total', 'value'],
-            'taxable': ['taxable value', 'taxable', 'taxable amount', 'value', 'txbl value', 'assessable value', 'net amount'],
-            'cgst': ['input cgst', 'cgst', 'central gst', 'cgst amount'],
-            'sgst': ['input sgst', 'sgst', 'state gst', 'sgst amount'],
-            'igst': ['input igst', 'igst', 'integrated gst', 'igst amount'],
-            'tds_deducted': ['tds deducted', 'tds', 'tax deducted', 'tds amount', 'tax', 'tds paid'],
-            'tds_section': ['tds section', 'section', 'tds_sec', 'tax section', 'code']
+            'date': ['date', 'transaction date', 'entry date', 'dt'],
+            'party': ['party name', 'party', 'vendor', 'supplier', 'customer', 'name'],
+            'invoice': ['invoice no', 'invoice', 'inv no', 'invoice number'],
+            'gross': ['gross total', 'gross', 'total amount', 'bill amount'],
+            'taxable': ['taxable value', 'taxable', 'taxable amount', 'value'],
+            'cgst': ['input cgst', 'cgst', 'central gst'],
+            'sgst': ['input sgst', 'sgst', 'state gst'],
+            'igst': ['input igst', 'igst', 'integrated gst'],
+            'tds': ['tds deducted', 'tds', 'tax deducted'],
+            'tds_section': ['tds section', 'section', 'tds_sec']
         }
         
         mapped_columns = {}
         df_columns_lower = {col.lower().strip(): col for col in df.columns}
         
-        for standard_name, variations in column_patterns.items():
+        for std_name, variations in column_patterns.items():
             for var in variations:
-                # Exact match
                 if var in df_columns_lower:
-                    mapped_columns[standard_name] = df_columns_lower[var]
+                    mapped_columns[std_name] = df_columns_lower[var]
                     break
-                
-                # Partial match (for cases like "TDS Section" vs "TDS_Section")
-                for col_lower, col_original in df_columns_lower.items():
-                    if var.replace(' ', '') in col_lower.replace(' ', ''):
-                        mapped_columns[standard_name] = col_original
-                        break
         
         return mapped_columns
+    
+    @staticmethod
+    def apply_formulas(df):
+        """Apply dynamic formulas to create calculated columns"""
+        
+        # Formula 1: Total GST = CGST + SGST + IGST
+        if all(col in df.columns for col in ['Input CGST', 'Input SGST', 'Input IGST']):
+            df['Total GST'] = df['Input CGST'] + df['Input SGST'] + df['Input IGST']
+        
+        # Formula 2: GST Rate % = (Total GST / Taxable Value) * 100
+        if 'Total GST' in df.columns and 'taxable value' in df.columns:
+            df['GST Rate %'] = (df['Total GST'] / df['taxable value'].replace(0, np.nan)) * 100
+            df['GST Rate %'] = df['GST Rate %'].fillna(0).round(2)
+        
+        # Formula 3: TDS Rate % = (TDS Deducted / Taxable Value) * 100
+        if all(col in df.columns for col in ['TDS deducted', 'taxable value']):
+            df['TDS Rate %'] = (df['TDS deducted'] / df['taxable value'].replace(0, np.nan)) * 100
+            df['TDS Rate %'] = df['TDS Rate %'].fillna(0).round(2)
+        
+        # Formula 4: TDS Shortfall = Max(0, Required TDS - Actual TDS)
+        tds_rates = {'194C': 1, '194J': 10, '194I': 10, '194H': 5, '194Q': 0.1}
+        df['Required TDS'] = df.apply(
+            lambda row: (row['taxable value'] * tds_rates.get(str(row['TDS Section']).upper(), 1) / 100)
+            if pd.notna(row.get('TDS Section')) else 0, axis=1
+        )
+        df['TDS Shortfall'] = np.maximum(0, df['Required TDS'] - df['TDS deducted'])
+        
+        # Formula 5: Interest on Shortfall (1.5% per month for 3 months)
+        df['Interest Payable'] = df['TDS Shortfall'] * 0.015 * 3
+        
+        # Formula 6: Net Payable = Taxable Value + Total GST - TDS deducted
+        if 'Total GST' in df.columns:
+            df['Net Payable'] = df['taxable value'] + df['Total GST'] - df['TDS deducted']
+        
+        # Formula 7: Compliance Status
+        df['Compliance Status'] = df.apply(
+            lambda row: '✅ Compliant' if row['TDS Shortfall'] == 0 
+            else '⚠️ Shortfall' if row['TDS Shortfall'] > 0 
+            else '❌ Not Deducted', axis=1
+        )
+        
+        return df
 
-# --- 4. MATERIALITY ANALYSIS ENGINE ---
+# --- 6. MATERIALITY ENGINE ---
 class MaterialityEngine:
-    """Advanced materiality calculation and classification"""
+    def __init__(self, threshold=5.0):
+        self.threshold = threshold
     
-    def __init__(self, threshold_percent=5.0):
-        self.threshold_percent = threshold_percent
-        self.materiality_levels = {
-            'Critical': {'color': '#f43b47', 'weight': 3, 'threshold': 0.5},
-            'High': {'color': '#f9d423', 'weight': 2, 'threshold': 0.2},
-            'Medium': {'color': '#00b09b', 'weight': 1.5, 'threshold': 0.1},
-            'Low': {'color': '#667eea', 'weight': 1, 'threshold': 0.05},
-            'Immaterial': {'color': '#95a5a6', 'weight': 0.5, 'threshold': 0}
-        }
-    
-    def calculate(self, df, value_column):
-        """Calculate materiality and classify transactions"""
+    def calculate(self, df):
+        if 'taxable value' not in df.columns:
+            return df
         
-        if value_column not in df.columns:
-            return df, 0, 0, value_column
+        total = df['taxable value'].sum()
+        materiality_amount = total * (self.threshold / 100)
         
-        total_value = df[value_column].sum()
-        materiality_amount = total_value * (self.threshold_percent / 100) if total_value > 0 else 0
+        # Materiality Score
+        df['Materiality Score'] = df['taxable value'] / materiality_amount if materiality_amount > 0 else 0
         
-        # Calculate materiality score for each transaction
-        if materiality_amount > 0:
-            df['materiality_score'] = df[value_column] / materiality_amount
-        else:
-            df['materiality_score'] = 0
-            
-        df['materiality_level'] = 'Immaterial'
-        df['materiality_weight'] = 0.5
-        df['audit_priority'] = 'Low'
-        
-        # Classify based on materiality score
+        # Materiality Level
         conditions = [
-            (df['materiality_score'] >= 0.5),
-            (df['materiality_score'] >= 0.2),
-            (df['materiality_score'] >= 0.1),
-            (df['materiality_score'] >= 0.05),
-            (df['materiality_score'] < 0.05)
+            df['Materiality Score'] >= 0.5,
+            df['Materiality Score'] >= 0.2,
+            df['Materiality Score'] >= 0.1,
+            df['Materiality Score'] >= 0.05,
+            df['Materiality Score'] < 0.05
         ]
+        levels = ['🔥 CRITICAL', '⚡ HIGH', '💫 MEDIUM', '🌟 LOW', '📦 IMMATERIAL']
+        df['Materiality Level'] = np.select(conditions, levels, default='📦 IMMATERIAL')
         
-        levels = ['Critical', 'High', 'Medium', 'Low', 'Immaterial']
-        weights = [3, 2, 1.5, 1, 0.5]
-        priorities = ['Critical', 'High', 'Medium', 'Low', 'Low']
+        # Audit Priority
+        priority_map = {
+            '🔥 CRITICAL': 1,
+            '⚡ HIGH': 2,
+            '💫 MEDIUM': 3,
+            '🌟 LOW': 4,
+            '📦 IMMATERIAL': 5
+        }
+        df['Audit Priority'] = df['Materiality Level'].map(priority_map)
         
-        df['materiality_level'] = np.select(conditions, levels, default='Immaterial')
-        df['materiality_weight'] = np.select(conditions, weights, default=0.5)
-        df['audit_priority'] = np.select(conditions, priorities, default='Low')
-        
-        return df, total_value, materiality_amount, value_column
+        return df, total, materiality_amount
 
-# --- 5. INTELLIGENT SAMPLING ENGINE ---
+# --- 7. SAMPLING ENGINE ---
 class SamplingEngine:
-    """Advanced sampling with multiple methodologies"""
-    
     @staticmethod
-    def calculate_sample_size(population_size, confidence_level=95, margin_of_error=5):
-        """Calculate required sample size based on statistics"""
-        z_scores = {80: 1.28, 85: 1.44, 90: 1.645, 95: 1.96, 99: 2.576}
-        z = z_scores.get(confidence_level, 1.96)
-        p = 0.5  # Maximum variability
-        e = margin_of_error / 100
-        
-        sample_size = int((z**2 * p * (1-p)) / e**2)
-        return min(sample_size, population_size)
-    
-    @staticmethod
-    def percentage_based_sampling(df, percentage, value_column):
-        """Sample based on percentage of population"""
+    def percentage_sampling(df, percentage):
         n = max(1, int(len(df) * (percentage / 100)))
         return df.sample(n=min(n, len(df)))
     
     @staticmethod
-    def systematic_sampling(df, n, value_column):
-        """Systematic sampling with random start"""
-        if len(df) <= n:
-            return df
-        step = len(df) // n
-        start = np.random.randint(0, step)
-        indices = range(start, len(df), step)
-        return df.iloc[indices].head(n)
-    
-    @staticmethod
-    def stratified_sampling(df, n, strata_column, value_column):
-        """Stratified sampling maintaining proportions"""
+    def materiality_sampling(df, percentage):
         samples = []
-        for stratum in df[strata_column].unique():
-            stratum_df = df[df[strata_column] == stratum]
-            stratum_n = max(1, int(n * len(stratum_df) / len(df)))
-            samples.append(stratum_df.sample(n=min(stratum_n, len(stratum_df))))
-        return pd.concat(samples)
-    
-    @staticmethod
-    def mus_sampling(df, n, value_column):
-        """Monetary Unit Sampling"""
-        if value_column not in df.columns or df[value_column].sum() == 0:
-            return df.sample(n=min(n, len(df)))
+        for level in ['🔥 CRITICAL', '⚡ HIGH', '💫 MEDIUM', '🌟 LOW']:
+            level_df = df[df['Materiality Level'] == level]
+            if len(level_df) > 0:
+                if level == '🔥 CRITICAL':
+                    pct = min(percentage * 2, 100)
+                elif level == '⚡ HIGH':
+                    pct = percentage
+                else:
+                    pct = percentage * 0.5
+                n = max(1, int(len(level_df) * (pct / 100)))
+                samples.append(level_df.sample(n=min(n, len(level_df))))
         
-        # Calculate sampling interval
-        total_value = df[value_column].sum()
-        interval = total_value / n if n > 0 else total_value
-        
-        # Select samples based on cumulative value
-        df_sorted = df.sort_values(value_column, ascending=False)
-        df_sorted['cumulative'] = df_sorted[value_column].cumsum()
-        
-        samples = []
-        current_sample = interval
-        for _, row in df_sorted.iterrows():
-            if row['cumulative'] >= current_sample and len(samples) < n:
-                samples.append(row)
-                current_sample += interval
-        
-        return pd.DataFrame(samples) if samples else df.sample(n=min(n, len(df)))
-    
-    @staticmethod
-    def materiality_weighted_sampling(df, n, value_column):
-        """Weighted sampling based on materiality"""
-        if 'materiality_weight' not in df.columns:
-            return df.sample(n=min(n, len(df)))
-        
-        # Calculate sampling probabilities based on materiality weight
-        weights = df['materiality_weight'] / df['materiality_weight'].sum()
-        return df.sample(n=min(n, len(df)), weights=weights)
+        return pd.concat(samples) if samples else df.sample(n=max(1, int(len(df) * percentage/100)))
 
-# --- 6. TDS COMPLIANCE ENGINE ---
-class TDSComplianceEngine:
-    """Comprehensive TDS calculation and compliance checking"""
+# --- 8. PARTY-WISE DASHBOARD ---
+def create_party_dashboard(df):
+    """Create comprehensive party-wise analysis"""
     
-    def __init__(self):
-        self.tds_rates = {
-            # Section: (rate, threshold, description)
-            '194C': (0.01, 30000, 'Contractors - Single Contract'),
-            '194J': (0.10, 30000, 'Professional Services'),
-            '194I': (0.10, 180000, 'Rent - Plant/Machinery'),
-            '194H': (0.05, 15000, 'Commission/Brokerage'),
-            '194Q': (0.001, 5000000, 'TDS on Purchase of Goods'),
-            '194IA': (0.01, 5000000, 'TDS on Property Purchase'),
-            '194IB': (0.05, 50000, 'TDS on Rent (Individual)'),
-            '194M': (0.05, 5000000, 'TDS on Contract/Commission'),
-        }
-        
-        self.penalty_rates = {
-            'interest_1_5': 0.015,  # 1.5% per month
-            'interest_1': 0.01       # 1% per month
-        }
+    # Party-wise Aggregation
+    party_stats = df.groupby('Party name').agg({
+        'taxable value': ['sum', 'count', 'mean'],
+        'TDS deducted': 'sum',
+        'Required TDS': 'sum',
+        'TDS Shortfall': 'sum',
+        'Interest Payable': 'sum',
+        'Total GST': 'sum' if 'Total GST' in df.columns else 'sum'
+    }).round(2)
     
-    def calculate_tds(self, df, interest_months=3):
-        """Calculate TDS requirements and identify shortfalls"""
-        
-        results = []
-        
-        for _, row in df.iterrows():
-            section = str(row.get('TDS Section', 'NA')).strip().upper()
-            taxable = float(row.get('taxable value', 0))
-            tds_deducted = float(row.get('TDS deducted', 0))
-            
-            # Get applicable rate
-            rate_info = self.tds_rates.get(section, (0.01, 0))
-            tds_rate = rate_info[0]
-            threshold = rate_info[1]
-            
-            # Calculate required TDS
-            if taxable > threshold:
-                tds_required = taxable * tds_rate
-            else:
-                tds_required = 0
-            
-            # Calculate shortfall
-            shortfall = max(0, tds_required - tds_deducted)
-            
-            # Calculate interest
-            interest = shortfall * self.penalty_rates['interest_1_5'] * interest_months
-            
-            # Risk score (0-100)
-            if tds_required > 0:
-                compliance_ratio = min(tds_deducted / tds_required, 1.0)
-                risk_score = max(0, 100 - (compliance_ratio * 100))
-            else:
-                compliance_ratio = 1.0
-                risk_score = 0
-            
-            results.append({
-                'tds_required': round(tds_required, 2),
-                'tds_shortfall': round(shortfall, 2),
-                'interest_payable': round(interest, 2),
-                'compliance_ratio': round(compliance_ratio * 100, 2),
-                'risk_score': round(risk_score, 2),
-                'penalty_applicable': shortfall > 0
-            })
-        
-        return pd.DataFrame(results)
+    party_stats.columns = ['Total Value', 'Transactions', 'Avg Value', 
+                          'TDS Paid', 'TDS Required', 'TDS Shortfall', 
+                          'Interest', 'Total GST']
+    
+    party_stats['Compliance %'] = (party_stats['TDS Paid'] / party_stats['TDS Required'] * 100).fillna(100)
+    party_stats['Risk Score'] = 100 - party_stats['Compliance %']
+    
+    return party_stats.sort_values('Total Value', ascending=False)
 
-# --- 7. SAMPLE EXCEL GENERATOR (FIXED) ---
-def generate_sample_excel():
-    """Generate sample Excel file for users to download"""
+# --- 9. SAMPLE EXCEL GENERATOR ---
+@st.cache_data
+def generate_sample_data():
+    """Generate sample data with formulas"""
     
     np.random.seed(42)
     
-    # Parties with their typical TDS sections
-    parties_data = [
-        ("M/s Sharma Construction", "194C", 0.01),
-        ("Patil Builders & Developers", "194C", 0.01),
-        ("Desai Infrastructure Ltd", "194C", 0.01),
-        ("Kulkarni Contractors", "194C", 0.01),
-        ("Joshi & Associates", "194C", 0.01),
-        ("City Hospital", "194J", 0.10),
-        ("Dr. Mehta's Clinic", "194J", 0.10),
-        ("Legal Eagles Associates", "194J", 0.10),
-        ("Consulting Pros Pvt Ltd", "194J", 0.10),
-        ("Tech Solutions Inc", "194J", 0.10),
-        ("Royal Properties", "194I", 0.10),
-        ("Godrej Properties", "194I", 0.10),
-        ("Warehouse Solutions", "194I", 0.10),
-        ("Office Space Ltd", "194I", 0.10),
-        ("Mall Management Co", "194I", 0.10),
-        ("Marketing Gurus", "194H", 0.05),
-        ("Insurance Brokers Ltd", "194H", 0.05),
-        ("Real Estate Agents", "194H", 0.05),
-        ("Travel Agents Assoc", "194H", 0.05),
-        ("Advertising Agency", "194H", 0.05),
-        ("Steel Suppliers Ltd", "194Q", 0.001),
-        ("Cement Corporation", "194Q", 0.001),
-        ("Building Materials Co", "194Q", 0.001),
-        ("Electrical Goods Ltd", "194Q", 0.001),
-        ("Furniture Mart", "194Q", 0.001),
+    parties = [
+        "Precision Engineering Works", "Vijayalakshmi Electricals", "Geeta Steel Traders",
+        "Roots Multiclient Ltd", "Shri Aajii Industrial", "FM Engineers", "B Anjaiash",
+        "K Engineers", "ACE CNC TECHNOLOGIES", "B-SON Electricals", "Nehwari Engineering",
+        "Hindusthan Metals", "Tech Solutions Inc", "City Hospital", "Royal Properties"
     ]
     
-    # Generate dates for the last 6 months
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=180)
-    date_list = []
-    current_date = start_date
-    while current_date <= end_date:
-        date_list.append(current_date)
-        current_date += timedelta(days=1)
+    sections = ['194C', '194J', '194I', '194H', '194Q']
     
-    # Create dataframe
     data = []
-    invoice_counter = 1000
+    start_date = datetime(2023, 4, 1)
     
-    for i in range(250):  # Generate 250 transactions
-        party_idx = np.random.randint(0, len(parties_data))
-        party_name, tds_section, tds_rate = parties_data[party_idx]
+    for i in range(100):
+        date = start_date + timedelta(days=np.random.randint(0, 365))
+        party = np.random.choice(parties)
+        section = np.random.choice(sections, p=[0.5, 0.2, 0.1, 0.1, 0.1])
         
-        # Fix: Convert datetime to string properly
-        date_idx = np.random.randint(0, len(date_list))
-        date_obj = date_list[date_idx]
-        date_str = date_obj.strftime('%d-%m-%Y')
+        if section == '194C':
+            taxable = np.random.uniform(5000, 500000)
+        elif section == '194J':
+            taxable = np.random.uniform(25000, 300000)
+        else:
+            taxable = np.random.uniform(10000, 200000)
         
-        invoice_no = f"INV-2024{invoice_counter:04d}"
-        invoice_counter += 1
+        gross = taxable * 1.18  # 18% GST
+        cgst = gross * 0.09 if np.random.random() > 0.3 else 0
+        sgst = gross * 0.09 if cgst > 0 else 0
+        igst = gross * 0.18 if cgst == 0 else 0
         
-        # Generate amounts based on TDS section
-        if tds_section == "194C":
-            gross_total = np.random.uniform(50000, 500000)
-        elif tds_section == "194J":
-            gross_total = np.random.uniform(25000, 300000)
-        elif tds_section == "194I":
-            gross_total = np.random.uniform(100000, 1000000)
-        elif tds_section == "194H":
-            gross_total = np.random.uniform(10000, 200000)
-        else:  # 194Q
-            gross_total = np.random.uniform(200000, 2000000)
-        
-        gross_total = round(gross_total, 2)
-        taxable_value = gross_total
-        
-        # Sometimes TDS is short-deducted
-        deduction_factor = np.random.choice([0, 0.5, 0.8, 1.0], p=[0.1, 0.1, 0.2, 0.6])
-        tds_deducted = round(taxable_value * tds_rate * deduction_factor, 2)
-        
-        # GST components
-        gst_rate = 0.18
-        gst_amount = round(gross_total * gst_rate, 2)
-        
-        if np.random.random() > 0.3:  # 70% intra-state
-            cgst = round(gst_amount / 2, 2)
-            sgst = round(gst_amount / 2, 2)
-            igst = 0
-        else:  # 30% inter-state
-            cgst = 0
-            sgst = 0
-            igst = gst_amount
+        tds_rate = {'194C': 0.01, '194J': 0.10, '194I': 0.10, '194H': 0.05, '194Q': 0.001}[section]
+        tds_deducted = taxable * tds_rate * np.random.choice([0, 0.5, 0.8, 1.0], p=[0.1, 0.1, 0.2, 0.6])
         
         data.append([
-            date_str,
-            party_name,
-            invoice_no,
-            gross_total,
-            taxable_value,
-            cgst,
-            sgst,
-            igst,
-            tds_deducted,
-            tds_section
+            date.strftime('%d-%m-%Y'),
+            party,
+            f"INV-{2024000+i}",
+            round(gross, 2),
+            round(taxable, 2),
+            round(cgst, 2),
+            round(sgst, 2),
+            round(igst, 2),
+            round(tds_deducted, 2),
+            section
         ])
     
     df = pd.DataFrame(data, columns=[
@@ -545,523 +496,298 @@ def generate_sample_excel():
         'Input CGST', 'Input SGST', 'Input IGST', 'TDS deducted', 'TDS Section'
     ])
     
-    # Sort by date
-    df['Date_temp'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
-    df = df.sort_values('Date_temp')
-    df = df.drop('Date_temp', axis=1)
+    # Apply formulas
+    processor = DataProcessor()
+    df = processor.apply_formulas(df)
     
-    # Save to BytesIO
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, sheet_name='Sample Ledger Data', index=False)
-        
-        workbook = writer.book
-        worksheet = writer.sheets['Sample Ledger Data']
-        
-        # Add formats
-        header_format = workbook.add_format({
-            'bold': True, 'bg_color': '#4472C4', 'font_color': 'white',
-            'border': 1, 'align': 'center', 'valign': 'vcenter'
-        })
-        
-        money_format = workbook.add_format({'num_format': '₹#,##0.00'})
-        date_format = workbook.add_format({'num_format': 'dd-mm-yyyy'})
-        
-        # Format columns
-        for col_num, value in enumerate(df.columns.values):
-            worksheet.write(0, col_num, value, header_format)
-        
-        worksheet.set_column('A:A', 12, date_format)
-        worksheet.set_column('B:B', 30)
-        worksheet.set_column('C:C', 15)
-        worksheet.set_column('D:I', 15, money_format)
-        worksheet.set_column('J:J', 12)
-        
-        # Add summary sheet
-        summary_data = {
-            'TDS Section': ['194C', '194J', '194I', '194H', '194Q'],
-            'Description': ['Contractors', 'Professional Services', 'Rent', 'Commission', 'Purchase'],
-            'TDS Rate (%)': [1, 10, 10, 5, 0.1],
-            'Threshold (₹)': [30000, 30000, 180000, 15000, 5000000]
-        }
-        summary_df = pd.DataFrame(summary_data)
-        summary_df.to_excel(writer, sheet_name='TDS Reference', index=False)
-    
-    return output.getvalue()
+    return df
 
-# --- 8. REPORT GENERATOR ---
-class ReportGenerator:
-    """Professional report generation with multiple formats"""
-    
-    @staticmethod
-    def generate_excel_report(df, sample_df, tds_summary, materiality_df):
-        """Generate comprehensive Excel report"""
-        
-        output = BytesIO()
-        
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            workbook = writer.book
-            
-            # Premium formats
-            header_format = workbook.add_format({
-                'bold': True,
-                'bg_color': '#4472C4',
-                'font_color': 'white',
-                'border': 1,
-                'align': 'center',
-                'valign': 'vcenter',
-                'font_size': 11
-            })
-            
-            money_format = workbook.add_format({'num_format': '₹#,##0.00'})
-            percent_format = workbook.add_format({'num_format': '0.00%'})
-            
-            # Executive Summary Sheet
-            summary_data = {
-                'Metric': [
-                    'Total Transactions',
-                    'Total Value',
-                    'Sample Size',
-                    'Sample Percentage',
-                    'Sample Coverage',
-                    'Critical Items',
-                    'TDS Shortfall',
-                    'Interest Payable'
-                ],
-                'Value': [
-                    len(df),
-                    df['taxable value'].sum() if 'taxable value' in df.columns else 0,
-                    len(sample_df),
-                    f"{(len(sample_df)/len(df)*100):.1f}%" if len(df) > 0 else "0%",
-                    f"{(sample_df['taxable value'].sum() / df['taxable value'].sum() * 100):.1f}%" if 'taxable value' in df.columns and df['taxable value'].sum() > 0 else "0%",
-                    len(df[df['materiality_level'] == 'Critical']) if 'materiality_level' in df.columns else 0,
-                    tds_summary['tds_shortfall'].sum() if 'tds_shortfall' in tds_summary.columns else 0,
-                    tds_summary['interest_payable'].sum() if 'interest_payable' in tds_summary.columns else 0
-                ]
-            }
-            
-            summary_df = pd.DataFrame(summary_data)
-            summary_df.to_excel(writer, sheet_name='Executive Summary', index=False)
-            
-            # Format sheets
-            sheets = {
-                'Materiality_Analysis': materiality_df,
-                'Sample_Selection': sample_df,
-                'TDS_Compliance': tds_summary,
-                'Raw_Data': df
-            }
-            
-            for sheet_name, data in sheets.items():
-                if not data.empty:
-                    data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=1)
-                    worksheet = writer.sheets[sheet_name]
-                    
-                    # Write headers
-                    for col_num, col_name in enumerate(data.columns):
-                        worksheet.write(0, col_num, col_name, header_format)
-                    
-                    # Auto-adjust columns
-                    for col_num, col_name in enumerate(data.columns):
-                        max_len = max(
-                            data[col_name].astype(str).map(len).max() if not data[col_name].empty else 0,
-                            len(col_name)
-                        ) + 2
-                        worksheet.set_column(col_num, col_num, min(max_len, 50))
-        
-        return output.getvalue()
-
-# --- 9. MAIN APPLICATION ---
+# --- 10. MAIN APPLICATION ---
 def main():
-    """Main application with enhanced UI/UX"""
     
-    # Premium Header
-    st.markdown("""
-    <div class="premium-header">
-        <h1 style="margin:0; font-size:2.5rem;">🔍 Ultra-Audit Pro</h1>
-        <p style="margin:10px 0 0 0; opacity:0.9;">Enterprise Edition | AI-Powered Materiality Analysis & TDS Compliance</p>
-        <div style="margin-top:20px; display:flex; gap:10px;">
-            <span class="badge-high">Critical</span>
-            <span class="badge-medium">High</span>
-            <span class="badge-low">Medium</span>
-            <span style="background:#667eea; color:white; padding:5px 15px; border-radius:20px;">Low</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Initialize session state
-    if 'data_processed' not in st.session_state:
-        st.session_state.data_processed = False
-    
-    # Sidebar Configuration
+    # Sidebar
     with st.sidebar:
-        st.markdown("### ⚙️ Audit Configuration")
+        st.markdown("""
+        <div style="background: rgba(0,255,135,0.1); padding: 20px; border-radius: 20px; border: 1px solid #00ff87;">
+            <h3 style="color: #00ff87; font-family: 'Orbitron', sans-serif;">⚡ CONTROL PANEL</h3>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Sample Download Button
-        st.markdown("### 📥 Sample Data")
-        try:
-            sample_excel = generate_sample_excel()
-            st.download_button(
-                label="📊 Download Sample Excel Template",
-                data=sample_excel,
-                file_name="TDS_Sample_Data.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.error(f"Error generating sample: {str(e)}")
+        # Sample Data Download
+        sample_df = generate_sample_data()
+        sample_excel = BytesIO()
+        with pd.ExcelWriter(sample_excel, engine='xlsxwriter') as writer:
+            sample_df.to_excel(writer, sheet_name='Sample Data', index=False)
+        
+        st.download_button(
+            label="📥 DOWNLOAD SAMPLE DATA",
+            data=sample_excel.getvalue(),
+            file_name="Ultra_Audit_Sample.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
         
         st.markdown("---")
         
-        # Materiality Settings
-        with st.expander("🎯 Materiality Parameters", expanded=True):
-            materiality_threshold = st.slider(
-                "Materiality Threshold (%)",
-                min_value=0.1,
-                max_value=10.0,
-                value=5.0,
-                step=0.1,
-                help="Percentage of total value for materiality"
-            )
-        
-        # Sampling Configuration
-        with st.expander("📊 Sampling Strategy", expanded=True):
-            sampling_method = st.selectbox(
-                "Primary Sampling Method",
-                [
-                    "Percentage Based Sampling",
-                    "Materiality-Weighted Sampling",
-                    "Monetary Unit Sampling (MUS)",
-                    "Stratified Sampling",
-                    "Systematic Sampling",
-                    "Simple Random Sampling"
-                ]
-            )
-            
-            # Percentage based sampling
-            sample_percentage = st.slider(
-                "Sample Selection (%)",
-                min_value=1,
-                max_value=100,
-                value=20,
-                step=1,
-                help="Percentage of transactions to select for sample"
-            )
-            
-            confidence_level = st.slider(
-                "Confidence Level (%)",
-                min_value=80,
-                max_value=99,
-                value=95,
-                step=1
-            )
-            
-            margin_of_error = st.slider(
-                "Margin of Error (%)",
-                min_value=1,
-                max_value=10,
-                value=5,
-                step=1
-            )
-        
-        # TDS Configuration
-        with st.expander("💰 TDS Settings", expanded=True):
-            interest_months = st.number_input(
-                "Interest Calculation (Months)",
-                min_value=1,
-                max_value=12,
-                value=3
-            )
+        # Parameters
+        materiality_threshold = st.slider("🎯 Materiality Threshold %", 0.1, 10.0, 5.0, 0.1)
+        sample_percentage = st.slider("📊 Sample Selection %", 1, 100, 20)
+        sampling_method = st.selectbox("🎲 Sampling Method", ["Percentage Based", "Materiality Weighted"])
+        interest_months = st.number_input("💰 Interest Months", 1, 12, 3)
     
-    # File Upload Section
-    st.markdown("### 📤 Upload Data")
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        uploaded_file = st.file_uploader(
-            "Drop your ledger file here",
-            type=['xlsx', 'csv', 'xls'],
-            help="Supported formats: Excel (.xlsx, .xls) or CSV"
-        )
-    
-    with col2:
-        st.markdown("""
-        <div class="info-box">
-            <h4>📋 Expected Format</h4>
-            <p style="font-size:12px; margin:5px 0;">Date | Party Name | Invoice No | Gross Total | Taxable Value | CGST | SGST | IGST | TDS Deducted | TDS Section</p>
-            <p style="font-size:11px; color:#666;">The system auto-detects column names</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # File Upload
+    st.markdown("### 📤 UPLOAD LEDGER FILE")
+    uploaded_file = st.file_uploader("", type=['xlsx', 'csv'], label_visibility="collapsed")
     
     if uploaded_file:
         try:
-            # Load data
+            # Load Data
             if uploaded_file.name.endswith('.csv'):
                 df = pd.read_csv(uploaded_file)
             else:
                 df = pd.read_excel(uploaded_file)
             
-            # Show preview
-            with st.expander("📊 Data Preview", expanded=False):
-                st.dataframe(df.head(), use_container_width=True)
-                st.caption(f"Total Rows: {len(df)} | Total Columns: {len(df.columns)}")
+            # Process Data
+            processor = DataProcessor()
+            column_mapping = processor.detect_columns(df)
             
-            # Process data
-            with st.spinner("🔄 Processing data with AI engine..."):
-                
-                # Detect columns
-                processor = DataProcessor()
-                column_mapping = processor.detect_columns(df)
-                
-                # Rename columns for consistency
-                rename_map = {}
-                for std_name, orig_name in column_mapping.items():
-                    if std_name == 'taxable':
-                        rename_map[orig_name] = 'taxable value'
-                    elif std_name == 'tds_deducted':
-                        rename_map[orig_name] = 'TDS deducted'
-                    elif std_name == 'tds_section':
-                        rename_map[orig_name] = 'TDS Section'
-                    elif std_name == 'party':
-                        rename_map[orig_name] = 'Party name'
-                    elif std_name == 'invoice':
-                        rename_map[orig_name] = 'Invoice no'
-                    elif std_name == 'gross':
-                        rename_map[orig_name] = 'Gross Total'
-                
-                df = df.rename(columns=rename_map)
-                
-                # Clean numeric columns
-                numeric_cols = ['Gross Total', 'taxable value', 'TDS deducted', 
-                              'Input CGST', 'Input SGST', 'Input IGST']
-                
-                for col in numeric_cols:
-                    if col in df.columns:
-                        df[col] = processor.clean_numeric(df[col])
-                    else:
-                        df[col] = 0
-                
-                # Ensure required columns exist
-                if 'TDS Section' not in df.columns:
-                    df['TDS Section'] = 'NA'
-                
-                if 'Party name' not in df.columns:
-                    df['Party name'] = 'Unknown'
-                
-                if 'Invoice no' not in df.columns:
-                    df['Invoice no'] = [f'INV-{i:04d}' for i in range(len(df))]
-                
-                # Process dates if available
-                if 'Date' in df.columns:
-                    try:
-                        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-                        df['Month'] = df['Date'].dt.month
-                        df['Year'] = df['Date'].dt.year
-                        df['Quarter'] = df['Date'].dt.quarter
-                    except:
-                        pass
-                
-                # Calculate materiality
-                materiality_engine = MaterialityEngine(materiality_threshold)
-                df, total_value, materiality_amount, value_col = materiality_engine.calculate(df, 'taxable value')
-                
-                st.session_state.data_processed = True
+            # Rename columns
+            rename_map = {}
+            for std, orig in column_mapping.items():
+                if std == 'taxable': rename_map[orig] = 'taxable value'
+                elif std == 'tds': rename_map[orig] = 'TDS deducted'
+                elif std == 'tds_section': rename_map[orig] = 'TDS Section'
+                elif std == 'party': rename_map[orig] = 'Party name'
+                elif std == 'invoice': rename_map[orig] = 'Invoice no'
+                elif std == 'gross': rename_map[orig] = 'Gross Total'
+                elif std == 'cgst': rename_map[orig] = 'Input CGST'
+                elif std == 'sgst': rename_map[orig] = 'Input SGST'
+                elif std == 'igst': rename_map[orig] = 'Input IGST'
             
-            # Premium Metrics Dashboard
-            st.markdown("### 📈 Real-Time Audit Intelligence")
+            df = df.rename(columns=rename_map)
             
-            # Key Metrics Row
-            metric_cols = st.columns(5)
-            
-            critical_count = len(df[df['materiality_level'] == 'Critical']) if 'materiality_level' in df.columns else 0
-            
-            with metric_cols[0]:
-                st.metric("Total Population", f"{len(df):,}")
-            
-            with metric_cols[1]:
-                st.metric("Total Value", f"₹{total_value:,.0f}")
-            
-            with metric_cols[2]:
-                st.metric("Critical Items", f"{critical_count}")
-            
-            with metric_cols[3]:
-                # Calculate sample size based on selected method
-                if sampling_method == "Percentage Based Sampling":
-                    sample_size_calc = max(1, int(len(df) * (sample_percentage / 100)))
+            # Clean numeric columns
+            for col in ['Gross Total', 'taxable value', 'TDS deducted', 
+                       'Input CGST', 'Input SGST', 'Input IGST']:
+                if col in df.columns:
+                    df[col] = processor.clean_numeric(df[col])
                 else:
-                    sampling_engine = SamplingEngine()
-                    sample_size_calc = sampling_engine.calculate_sample_size(
-                        len(df), confidence_level, margin_of_error
-                    )
-                
-                st.metric("Target Sample", f"{sample_size_calc}", 
-                         f"{(sample_size_calc/len(df)*100):.1f}%")
+                    df[col] = 0
             
-            with metric_cols[4]:
-                tds_shortfall_est = df['TDS deducted'].sum() * 0.15 if 'TDS deducted' in df.columns else 0
-                st.metric("Est. TDS Shortfall", f"₹{tds_shortfall_est:,.0f}")
+            # Apply formulas
+            df = processor.apply_formulas(df)
             
-            # Materiality Distribution
-            st.markdown("### 🎯 Materiality Analysis")
+            # Calculate Materiality
+            materiality_engine = MaterialityEngine(materiality_threshold)
+            df, total_value, materiality_amount = materiality_engine.calculate(df)
             
-            col1, col2 = st.columns([1, 1])
-            
-            with col1:
-                # Materiality Distribution Chart
-                materiality_dist = df['materiality_level'].value_counts().reset_index()
-                materiality_dist.columns = ['Level', 'Count']
-                
-                colors = {
-                    'Critical': '#f43b47',
-                    'High': '#f9d423',
-                    'Medium': '#00b09b',
-                    'Low': '#667eea',
-                    'Immaterial': '#95a5a6'
-                }
-                
-                fig = go.Figure(data=[
-                    go.Pie(
-                        labels=materiality_dist['Level'].tolist(),
-                        values=materiality_dist['Count'].tolist(),
-                        marker_colors=[colors.get(level, '#667eea') for level in materiality_dist['Level']],
-                        hole=0.4,
-                        textinfo='label+percent',
-                        textposition='auto'
-                    )
-                ])
-                
-                fig.update_layout(
-                    title="Transaction Distribution by Materiality",
-                    showlegend=False,
-                    height=400
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            
-            with col2:
-                # Value Distribution by Materiality
-                value_by_materiality = df.groupby('materiality_level')['taxable value'].sum().reset_index()
-                value_by_materiality.columns = ['Level', 'Value']
-                
-                fig = px.bar(
-                    value_by_materiality,
-                    x='Level',
-                    y='Value',
-                    color='Level',
-                    color_discrete_map=colors,
-                    title="Value Distribution by Materiality Level"
-                )
-                
-                fig.update_layout(height=400, showlegend=False)
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Sampling Execution
-            st.markdown("### 🎲 Intelligent Sampling Results")
-            
-            # Apply selected sampling method
+            # Apply Sampling
             sampling_engine = SamplingEngine()
-            
-            if sampling_method == "Percentage Based Sampling":
-                sample_df = sampling_engine.percentage_based_sampling(df, sample_percentage, 'taxable value')
-            elif sampling_method == "Materiality-Weighted Sampling":
-                sample_df = sampling_engine.materiality_weighted_sampling(df, sample_size_calc, 'taxable value')
-            elif sampling_method == "Monetary Unit Sampling (MUS)":
-                sample_df = sampling_engine.mus_sampling(df, sample_size_calc, 'taxable value')
-            elif sampling_method == "Stratified Sampling":
-                sample_df = sampling_engine.stratified_sampling(df, sample_size_calc, 'materiality_level', 'taxable value')
-            elif sampling_method == "Systematic Sampling":
-                sample_df = sampling_engine.systematic_sampling(df, sample_size_calc, 'taxable value')
+            if sampling_method == "Materiality Weighted":
+                sample_df = sampling_engine.materiality_sampling(df, sample_percentage)
             else:
-                sample_df = df.sample(n=min(sample_size_calc, len(df)))
+                sample_df = sampling_engine.percentage_sampling(df, sample_percentage)
             
-            # Calculate TDS compliance
-            tds_engine = TDSComplianceEngine()
-            tds_results = tds_engine.calculate_tds(sample_df, interest_months)
-            sample_df = pd.concat([sample_df.reset_index(drop=True), tds_results], axis=1)
+            # Party Dashboard
+            party_stats = create_party_dashboard(df)
             
-            # Sample Results Dashboard
-            col1, col2, col3, col4 = st.columns(4)
+            # ===== DASHBOARD =====
             
-            sample_value = sample_df['taxable value'].sum() if 'taxable value' in sample_df.columns else 0
-            critical_in_sample = len(sample_df[sample_df['materiality_level'] == 'Critical']) if 'materiality_level' in sample_df.columns else 0
-            avg_risk = sample_df['risk_score'].mean() if 'risk_score' in sample_df.columns else 0
-            total_shortfall = sample_df['tds_shortfall'].sum() if 'tds_shortfall' in sample_df.columns else 0
+            # Key Metrics
+            st.markdown("### 📊 REAL-TIME METRICS")
+            cols = st.columns(5)
             
-            with col1:
-                st.metric("Sample Value", f"₹{sample_value:,.0f}")
+            metrics = [
+                ("💰 Total Value", f"₹{total_value:,.0f}", "#00ff87"),
+                ("📦 Transactions", f"{len(df):,}", "#60efff"),
+                ("🔥 Critical Items", f"{len(df[df['Materiality Level']=='🔥 CRITICAL'])}", "#ff00ff"),
+                ("🎯 Sample Size", f"{len(sample_df)}", "#0061ff"),
+                ("⚠️ TDS Shortfall", f"₹{df['TDS Shortfall'].sum():,.0f}", "#ff4444")
+            ]
             
-            with col2:
-                st.metric("Critical Items", f"{critical_in_sample}")
+            for i, (label, value, color) in enumerate(metrics):
+                with cols[i]:
+                    st.markdown(f"""
+                    <div class="metric-card-ultra" style="border-color: {color};">
+                        <h4 style="color: {color}; margin:0;">{label}</h4>
+                        <h2 style="color: white; margin:10px 0;">{value}</h2>
+                    </div>
+                    """, unsafe_allow_html=True)
             
-            with col3:
-                st.metric("Avg Risk Score", f"{avg_risk:.1f}")
+            # Tabs
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "🎯 PARTY ANALYSIS", "📈 MATERIALITY VIEW", "🔍 SAMPLE DETAILS", 
+                "💰 TDS COMPLIANCE", "📊 TREND ANALYSIS"
+            ])
             
-            with col4:
-                st.metric("TDS Shortfall", f"₹{total_shortfall:,.0f}")
-            
-            # Detailed Sample View
-            with st.expander("🔍 View Sample Details", expanded=True):
-                display_cols = ['Party name', 'Invoice no', 'taxable value', 'TDS Section', 
-                              'materiality_level', 'tds_shortfall', 'risk_score']
-                display_cols = [col for col in display_cols if col in sample_df.columns]
+            with tab1:
+                st.markdown("### 🏢 PARTY-WISE ANALYSIS")
                 
-                if display_cols:
-                    st.dataframe(sample_df[display_cols], use_container_width=True, height=400)
+                # Party Selector
+                selected_party = st.selectbox("Select Party", ['All'] + list(party_stats.index[:20]))
+                
+                if selected_party != 'All':
+                    party_data = df[df['Party name'] == selected_party]
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # Party Summary
+                        st.markdown(f"""
+                        <div class="party-card">
+                            <h3 style="color: #00ff87;">{selected_party}</h3>
+                            <p>Total Value: ₹{party_data['taxable value'].sum():,.0f}</p>
+                            <p>Transactions: {len(party_data)}</p>
+                            <p>TDS Paid: ₹{party_data['TDS deducted'].sum():,.0f}</p>
+                            <p>TDS Shortfall: ₹{party_data['TDS Shortfall'].sum():,.0f}</p>
+                            <p>Compliance: {(party_data['TDS deducted'].sum()/party_data['Required TDS'].sum()*100):.1f}%</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    
+                    with col2:
+                        # Party Transactions Chart
+                        fig = px.bar(party_data, x='Date', y='taxable value', 
+                                   title=f"{selected_party} - Transaction Trend",
+                                   color='Materiality Level',
+                                   color_discrete_map={
+                                       '🔥 CRITICAL': '#ff00ff',
+                                       '⚡ HIGH': '#00ff87',
+                                       '💫 MEDIUM': '#60efff',
+                                       '🌟 LOW': '#0061ff'
+                                   })
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    # Party Transactions Table
+                    st.dataframe(party_data, use_container_width=True)
+                
+                else:
+                    # Party Stats Table
+                    st.dataframe(party_stats.style.background_gradient(
+                        subset=['Risk Score'], cmap='RdYlGn_r'
+                    ).format({
+                        'Total Value': '₹{:,.0f}',
+                        'TDS Paid': '₹{:,.0f}',
+                        'TDS Shortfall': '₹{:,.0f}',
+                        'Compliance %': '{:.1f}%',
+                        'Risk Score': '{:.1f}'
+                    }), use_container_width=True)
+                    
+                    # Top Parties Chart
+                    top_parties = party_stats.head(10).reset_index()
+                    fig = px.bar(top_parties, x='Party name', y='Total Value',
+                               title="Top 10 Parties by Value",
+                               color='Risk Score', color_continuous_scale='RdYlGn_r')
+                    st.plotly_chart(fig, use_container_width=True)
             
-            # Export Section
-            st.markdown("### 📥 Export Results")
+            with tab2:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Materiality Distribution
+                    mat_dist = df['Materiality Level'].value_counts().reset_index()
+                    mat_dist.columns = ['Level', 'Count']
+                    
+                    fig = go.Figure(data=[go.Pie(
+                        labels=mat_dist['Level'],
+                        values=mat_dist['Count'],
+                        hole=0.4,
+                        marker_colors=['#ff00ff', '#00ff87', '#60efff', '#0061ff', '#95a5a6']
+                    )])
+                    fig.update_layout(title="Materiality Distribution")
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # Value by Materiality
+                    val_dist = df.groupby('Materiality Level')['taxable value'].sum().reset_index()
+                    
+                    fig = px.bar(val_dist, x='Materiality Level', y='taxable value',
+                               color='Materiality Level',
+                               color_discrete_map={
+                                   '🔥 CRITICAL': '#ff00ff',
+                                   '⚡ HIGH': '#00ff87',
+                                   '💫 MEDIUM': '#60efff',
+                                   '🌟 LOW': '#0061ff'
+                               })
+                    fig.update_layout(title="Value by Materiality")
+                    st.plotly_chart(fig, use_container_width=True)
             
-            if st.button("📊 Generate Excel Report", use_container_width=True):
-                with st.spinner("Generating comprehensive report..."):
-                    report_gen = ReportGenerator()
-                    excel_data = report_gen.generate_excel_report(df, sample_df, sample_df, df)
+            with tab3:
+                st.markdown("### 🔍 SAMPLE DETAILS")
+                st.dataframe(sample_df, use_container_width=True)
+                
+                # Sample Composition
+                sample_composition = sample_df['Materiality Level'].value_counts()
+                fig = px.pie(values=sample_composition.values, names=sample_composition.index,
+                           title="Sample Composition", hole=0.3)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            with tab4:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # TDS Shortfall by Party
+                    shortfall_by_party = df.groupby('Party name')['TDS Shortfall'].sum().nlargest(10).reset_index()
+                    fig = px.bar(shortfall_by_party, x='Party name', y='TDS Shortfall',
+                               title="Top 10 TDS Shortfalls", color='TDS Shortfall')
+                    st.plotly_chart(fig, use_container_width=True)
+                
+                with col2:
+                    # TDS Compliance Rate
+                    compliance_by_section = df.groupby('TDS Section').agg({
+                        'TDS deducted': 'sum',
+                        'Required TDS': 'sum'
+                    }).reset_index()
+                    compliance_by_section['Compliance %'] = (compliance_by_section['TDS deducted'] / 
+                                                            compliance_by_section['Required TDS'] * 100)
+                    
+                    fig = px.bar(compliance_by_section, x='TDS Section', y='Compliance %',
+                               title="TDS Compliance by Section", color='Compliance %',
+                               color_continuous_scale='RdYlGn')
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            with tab5:
+                if 'Date' in df.columns:
+                    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+                    
+                    # Monthly Trend
+                    monthly = df.groupby(df['Date'].dt.to_period('M'))['taxable value'].sum().reset_index()
+                    monthly['Date'] = monthly['Date'].astype(str)
+                    
+                    fig = px.line(monthly, x='Date', y='taxable value',
+                                title="Monthly Transaction Trend", markers=True)
+                    st.plotly_chart(fig, use_container_width=True)
+            
+            # Export
+            st.markdown("### 📥 EXPORT REPORT")
+            if st.button("⚡ GENERATE ULTRA REPORT", use_container_width=True):
+                with st.spinner("Generating..."):
+                    output = BytesIO()
+                    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                        df.to_excel(writer, sheet_name='Complete Data', index=False)
+                        sample_df.to_excel(writer, sheet_name='Sample', index=False)
+                        party_stats.to_excel(writer, sheet_name='Party Analysis')
                     
                     st.download_button(
-                        label="📥 Download Excel Report",
-                        data=excel_data,
+                        label="📥 DOWNLOAD EXCEL REPORT",
+                        data=output.getvalue(),
                         file_name=f"Ultra_Audit_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
         
         except Exception as e:
-            st.error(f"❌ Error processing file: {str(e)}")
-            st.exception(e)
+            st.error(f"Error: {str(e)}")
     
     else:
         # Welcome Screen
         st.markdown("""
         <div style="text-align: center; padding: 50px;">
-            <h1 style="color: #667eea;">👋 Welcome to Ultra-Audit Pro Enterprise</h1>
-            <p style="color: #666; font-size: 18px; margin: 20px 0;">
-                The most advanced AI-powered audit sampling and TDS compliance platform
-            </p>
-            
-            <div style="display: flex; justify-content: center; gap: 20px; margin-top: 40px; flex-wrap: wrap;">
-                <div class="info-box" style="width: 250px;">
-                    <h3 style="color:#667eea;">🎯 AI Materiality</h3>
-                    <p>Intelligent transaction classification with 5-level materiality scoring</p>
-                </div>
-                
-                <div class="info-box" style="width: 250px;">
-                    <h3 style="color:#667eea;">📊 Smart Sampling</h3>
-                    <p>7 advanced sampling methods with percentage-based selection</p>
-                </div>
-                
-                <div class="info-box" style="width: 250px;">
-                    <h3 style="color:#667eea;">💰 TDS Engine</h3>
-                    <p>Automated compliance checking with interest & penalty calculation</p>
-                </div>
-                
-                <div class="info-box" style="width: 250px;">
-                    <h3 style="color:#667eea;">📈 Analytics</h3>
-                    <p>Real-time dashboards with predictive risk scoring</p>
-                </div>
-            </div>
-            
-            <div style="margin-top: 40px; padding: 20px; background: linear-gradient(135deg, #667eea20, #764ba220); border-radius: 10px;">
-                <p style="color: #666;">📁 Click the button in sidebar to download sample Excel template</p>
-                <p style="font-size: 12px; color: #999;">Supports Excel, CSV | Auto-detects column names | No data stored</p>
+            <h2 style="color: #00ff87; font-family: 'Orbitron', sans-serif;">🚀 READY FOR NEXT-GEN AUDIT</h2>
+            <p style="color: white; font-size: 1.2rem;">Upload your ledger file to begin</p>
+            <div style="display: flex; justify-content: center; gap: 20px; margin-top: 30px;">
+                <div class="glass-card">🎯 5-Level Materiality</div>
+                <div class="glass-card">📊 Dynamic Formulas</div>
+                <div class="glass-card">💰 TDS Intelligence</div>
+                <div class="glass-card">📈 Party Analytics</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
