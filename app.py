@@ -11,7 +11,7 @@ st.title("💎 Professional Audit Sampling & TDS Interest Engine")
 # --- 2. DATA SANITIZATION (Fixes TypeError) ---
 def clean_numeric(series):
     if series.dtype == 'object':
-        series = series.str.replace(r'[^\d.]', '', regex=True)
+        series = series.str.replace(r'[^\d.]', '', regex=True) #
     return pd.to_numeric(series, errors='coerce').fillna(0)
 
 # --- 3. SIDEBAR: SAMPLING CONFIGURATION ---
@@ -29,14 +29,14 @@ primary_methods = st.sidebar.multiselect("Choose Basis for Selection", options=m
 
 # --- 4. TEMPLATE & UPLOAD (Headers from) ---
 headers = ['Date', 'Party name', 'Invoice no', 'Gross Total', 'taxable value', 
-           'Input CGST', 'Input SGST', 'Input IGST', 'TDS deducted', 'TDS Section']
+           'Input CGST', 'Input SGST', 'Input IGST', 'TDS deducted', 'TDS Section'] #
 
 col_tmp, col_up = st.columns([1, 2])
 with col_tmp:
     tmp_df = pd.DataFrame(columns=headers)
     t_buffer = BytesIO()
     # Uses xlsxwriter to ensure no ModuleNotFoundError
-    tmp_df.to_excel(t_buffer, index=False, engine='xlsxwriter') 
+    tmp_df.to_excel(t_buffer, index=False, engine='xlsxwriter') #
     st.download_button("📥 Download Pro Template", t_buffer.getvalue(), "audit_pro_template.xlsx")
 
 uploaded_file = st.file_uploader("Upload Raw Ledger", type=['xlsx', 'csv'])
@@ -70,7 +70,7 @@ if uploaded_file:
         sample_df = pd.concat([sample_df, s]).drop_duplicates(subset=['Invoice no', 'Party name'])
 
     # --- 6. ADVANCED TDS & INTEREST CALCULATOR ---
-    # Section Rates (Adjust as needed)
+    # Section Rates Formula
     rates = {'194C': 0.01, '194J': 0.10, '194I': 0.10, '194H': 0.05, '194Q': 0.001}
     
     tds_summary = df.groupby(['Party name', 'TDS Section']).agg({
@@ -80,13 +80,12 @@ if uploaded_file:
 
     def calc_tds(row):
         section = str(row['TDS Section']).upper()
+        # FORMULA: Taxable Value * Section Rate
         return row['taxable value'] * rates.get(section, 0)
 
     tds_summary['TDS Needs to be Deducted'] = tds_summary.apply(calc_tds, axis=1)
     tds_summary['Shortfall (Less Deducted)'] = np.maximum(0, tds_summary['TDS Needs to be Deducted'] - tds_summary['TDS deducted'])
     
-    # Interest Calculator (1.5% per month for late payment on shortfall)
-    # Assumed delay: 3 months for demonstration; can be made dynamic
     tds_summary['Interest on Late Payment (1.5% pm)'] = tds_summary['Shortfall (Less Deducted)'] * 0.015 * 3
     tds_summary['Total Payable with Interest'] = tds_summary['Shortfall (Less Deducted)'] + tds_summary['Interest on Late Payment (1.5% pm)']
 
@@ -98,7 +97,8 @@ if uploaded_file:
     sampled_totals.columns = ['Party name', 'Sampled Value']
     
     coverage_summary = coverage_summary.merge(sampled_totals, on='Party name', how='left').fillna(0)
-    coverage_summary['% Sample Coverage'] = (coverage_summary['Sampled Value'] / coverage_summary['Raw File Total Value']) * 100
+    # Selection Percentage Calculation
+    coverage_summary['% Sample Selection'] = (coverage_summary['Sampled Value'] / coverage_summary['Raw File Total Value']) * 100
     coverage_summary['Selection Basis'] = ", ".join(primary_methods)
 
     # --- 8. UI & EXCEL EXPORT ---
@@ -108,23 +108,37 @@ if uploaded_file:
 
     out_bio = BytesIO()
     with pd.ExcelWriter(out_bio, engine='xlsxwriter') as writer:
-        # Sheet 1: Audit Dashboard
-        coverage_summary.to_excel(writer, sheet_name='Audit Dashboard', index=False)
-        # Sheet 2: Selected Samples
-        sample_df.to_excel(writer, sheet_name='Selected Samples', index=False)
-        # Sheet 3: TDS Applicability & Interest
-        tds_summary.to_excel(writer, sheet_name='TDS Applicability', index=False)
-        
-        # Add Chart to Dashboard Sheet
         workbook = writer.book
-        dash_sheet = writer.sheets['Audit Dashboard']
-        chart = workbook.add_chart({'type': 'column'})
-        chart.add_series({
-            'name': 'Sampled Value',
-            'categories': "='Audit Dashboard'!$A$2:$A$11",
-            'values': "='Audit Dashboard'!$C$2:$C$11",
-        })
-        dash_sheet.insert_chart('H2', chart)
+
+        # Define Sheets to include Subtotals at Top and Pie Charts
+        sheet_data = {
+            'Audit Dashboard': coverage_summary,
+            'Selected Samples': sample_df,
+            'TDS Applicability': tds_summary
+        }
+
+        for sheet_name, data in sheet_data.items():
+            # Write Subtotals at the Top (Row 0)
+            if not data.empty:
+                # Calculate numeric totals only
+                numeric_only = data.select_dtypes(include=[np.number]).sum()
+                subtotal_row = pd.DataFrame([["SUBTOTALS"] + [""] * (data.shape[1]-1)], columns=data.columns)
+                for col in numeric_only.index:
+                    subtotal_row[col] = numeric_only[col]
+                
+                subtotal_row.to_excel(writer, sheet_name=sheet_name, index=False, startrow=0)
+                data.to_excel(writer, sheet_name=sheet_name, index=False, startrow=2)
+
+                # Add Pie Chart to every sheet
+                ws = writer.sheets[sheet_name]
+                pie_chart = workbook.add_chart({'type': 'pie'})
+                # Points to the first numeric column for distribution
+                pie_chart.add_series({
+                    'name': f'{sheet_name} Distribution',
+                    'categories': f"='{sheet_name}'!$A$4:$A$13",
+                    'values': f"='{sheet_name}'!$B$4:$B$13",
+                })
+                ws.insert_chart('K2', pie_chart)
 
     st.download_button("📤 Download Final Multi-Sheet Audit Report", out_bio.getvalue(), "Final_Audit_Report.xlsx")
 
