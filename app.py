@@ -25,20 +25,20 @@ if 'audit_samples' not in st.session_state: st.session_state.audit_samples = Non
 
 # --- 2. DATA CLEANING & TDS ENGINE ---
 def process_ledger(df, materiality):
-    # Fix for TypeError: Force numeric conversion
+    # Fix for TypeError: Force numeric conversion and remove commas
     numeric_cols = ['Amount', 'CGST', 'SGST', 'IGST', 'Total Value']
     for c in numeric_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c].astype(str).str.replace(',', ''), errors='coerce').fillna(0)
     
-    df['Invoice Date'] = pd.to_datetime(df['Invoice Date'], errors='coerce')
+    df['Invoice Date'] = pd.to_datetime(df['Invoice Date'], dayfirst=True, errors='coerce')
     df = df.dropna(subset=['Invoice Date'])
 
     # TDS Calculation Logic
     def calculate_tds(row):
         sec = str(row.get('TDS Section', ''))
         if sec in TDS_MASTER:
-            return row['Amount'] * TDS_MASTER[sec]['rate']
+            return float(row['Amount']) * TDS_MASTER[sec]['rate']
         return 0.0
 
     def get_flags(row):
@@ -76,27 +76,28 @@ if uploaded_file:
 
     db = st.session_state.db
 
-    tab1, tab2, tab3 = st.tabs(["📉 Analytics", "🎯 Sampling", "📋 Final Workpaper"])
+    tab1, tab2, tab3 = st.tabs(["📉 Analytics Dashboard", "🎯 Sampling Engine", "📋 Final Workpaper"])
 
     with tab1:
-        st.subheader("Party-wise TDS Applicability (From Raw Data)")
-        # Section Category by Party-wise breakdown
+        st.subheader("Section-wise TDS Applicability & Risk")
+        
+        # Dashboard Charts
         party_sec = db.groupby(['Party Name', 'TDS Section'])['Amount'].sum().reset_index()
         st.plotly_chart(px.bar(party_sec, x='Party Name', y='Amount', color='TDS Section', title="Party-wise Section Exposure"), use_container_width=True)
         
         c1, c2 = st.columns(2)
         with c1:
-            st.plotly_chart(px.pie(db, values='TDS Deducted Amount', names='TDS Section', title="TDS Value by Section"), use_container_width=True)
+            if 'TDS Deducted Amount' in db.columns:
+                st.plotly_chart(px.pie(db, values='TDS Deducted Amount', names='TDS Section', title="TDS Value Distribution"), use_container_width=True)
         with c2:
-            st.plotly_chart(px.sunburst(db, path=['TDS Section', 'Risk Flags'], values='Amount', title="Section Risk Matrix"), use_container_width=True)
+            st.plotly_chart(px.sunburst(db, path=['TDS Section', 'Risk Flags'], values='Amount', title="Risk Strategy Matrix"), use_container_width=True)
 
     with tab2:
-        st.header("Strategic Sampling Logic")
-        methods = st.multiselect("Sampling Methodology", ["Simple Random", "Systematic", "Stratified", "MUS", "PPS"])
+        st.header("Select Audit Methodology")
+        methods = st.multiselect("Sampling Methods", ["Simple Random", "Systematic", "Stratified", "MUS", "PPS", "Haphazard"])
         coverage = st.slider("Cumulative Selection Rate (%)", 5, 100, 25)
 
         if st.button("🚀 Run Sampling Engine"):
-            # Include Material/Key Items
             results = db[db['Risk Flags'].str.contains("Material")].copy()
             results['Selection Basis'] = "Key Item (100% Test)"
             
@@ -106,10 +107,11 @@ if uploaded_file:
             if methods:
                 per_m = max(1, needed // len(methods))
                 for m in methods:
-                    s = pool.sample(n=min(len(pool), per_m))
-                    s['Selection Basis'] = m
-                    results = pd.concat([results, s])
-                    pool = pool[~pool.index.isin(s.index)]
+                    if len(pool) > 0:
+                        s = pool.sample(n=min(len(pool), per_m))
+                        s['Selection Basis'] = m
+                        results = pd.concat([results, s])
+                        pool = pool[~pool.index.isin(s.index)]
             
             st.session_state.audit_samples = results.drop_duplicates()
             st.success(f"Generated {len(st.session_state.audit_samples)} Audit Samples.")
@@ -117,7 +119,6 @@ if uploaded_file:
     with tab3:
         if st.session_state.audit_samples is not None:
             st.subheader("Interactive Audit Workpaper")
-            # Show TDS Section and TDS Deducted in UI
             edited = st.data_editor(
                 st.session_state.audit_samples,
                 column_config={
@@ -132,16 +133,13 @@ if uploaded_file:
             # MULTI-SHEET EXCEL EXPORT
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                # Sheet 1: Final Samples with TDS Section and Deducted Amount
+                # Sheet 1: Samples with TDS Sections and Deducted Amounts
                 edited.to_excel(writer, sheet_name='Audit_Samples', index=False)
-                # Sheet 2: Raw Ledger Data
+                # Sheet 2: Raw Data (Full Uploaded Ledger)
                 db.to_excel(writer, sheet_name='Full_Raw_Ledger', index=False)
-                # Sheet 3: Party-wise TDS Applicability by Section Category
-                tds_applicability = db.groupby(['Party Name', 'TDS Section']).agg({
-                    'Amount': 'sum', 
-                    'TDS Deducted Amount': 'sum'
-                }).reset_index()
-                tds_applicability.to_excel(writer, sheet_name='TDS_Applicability_Partywise', index=False)
+                # Sheet 3: Party-wise TDS Applicability Summary
+                tds_party = db.groupby(['Party Name', 'TDS Section']).agg({'Amount': 'sum', 'TDS Deducted Amount': 'sum'}).reset_index()
+                tds_party.to_excel(writer, sheet_name='TDS_Applicability_Partywise', index=False)
 
             st.download_button(
                 label="💾 Export Professional Audit Report (Excel)",
@@ -150,4 +148,4 @@ if uploaded_file:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 else:
-    st.info("Please upload your transaction ledger to begin.")
+    st.info("Upload your transaction ledger to begin the audit.")
