@@ -5,145 +5,130 @@ import holidays
 import io
 import numpy as np
 
-# Initialize India Holidays for 2026
-ind_holidays = holidays.India(years=2026)
-
-# --- TAX & AUDIT LOGIC ---
-TDS_THRESHOLDS = {
-    "Contract (194C)": 30000,
-    "Professional (194J)": 30000,
-    "Rent (194I)": 240000,
-    "Commission (194H)": 15000
+# --- 1. CONFIGURATION & MASTERS ---
+TDS_MASTER = {
+    "192": {"desc": "Salary", "limit": 250000},
+    "194A": {"desc": "Interest", "limit": 5000},
+    "194C": {"desc": "Contractors", "limit": 30000},
+    "194H": {"desc": "Commission", "limit": 15000},
+    "194I": {"desc": "Rent", "limit": 240000},
+    "194J": {"desc": "Professional", "limit": 30000},
+    "194Q": {"desc": "Purchase of Goods", "limit": 5000000}
 }
+
+ind_holidays = holidays.India(years=[2025, 2026])
+
+def get_fiscal_quarter(date):
+    month = date.month
+    if month in [4, 5, 6]: return "Q1 (Apr-Jun)"
+    if month in [7, 8, 9]: return "Q2 (Jul-Sep)"
+    if month in [10, 11, 12]: return "Q3 (Oct-Dec)"
+    return "Q4 (Jan-Mar)"
 
 def get_selection_reason(row, materiality):
     reasons = []
     dt = pd.to_datetime(row['Invoice Date'])
-    
-    # 1. Date Risks
     if dt.weekday() == 6: reasons.append("Sunday")
-    if dt in ind_holidays: reasons.append(f"Holiday ({ind_holidays.get(dt)})")
+    if dt in ind_holidays: reasons.append(f"Holiday")
+    if row['Amount'] >= materiality: reasons.append("High Value")
+    if row['Amount'] > 0 and row['Amount'] % 1000 == 0: reasons.append("Round Sum")
     
-    # 2. Value Risks
-    amt = row['Amount']
-    if amt >= materiality: reasons.append("Above Materiality")
-    if amt > 0 and amt % 1000 == 0: reasons.append("Round Number Case")
-    
-    # 3. TDS Logic
-    for sec, limit in TDS_THRESHOLDS.items():
-        if sec.split(" ")[0].lower() in str(row['Transaction Type']).lower() and amt >= limit:
-            reasons.append(f"TDS Trigger ({sec})")
-            
-    return " | ".join(reasons) if reasons else "Random Sample"
+    # Section Check
+    sec = str(row['TDS Section'])
+    if sec in TDS_MASTER and row['Amount'] >= TDS_MASTER[sec]['limit']:
+        reasons.append(f"TDS Threshold {sec}")
+    return " | ".join(reasons) if reasons else "Routine"
 
-st.set_page_config(page_title="CA Audit Pro 2026", layout="wide")
+st.set_page_config(page_title="Audit Intelligence 2026", layout="wide")
 
-# --- SESSION STATE MANAGEMENT ---
-if 'audit_data' not in st.session_state:
-    st.session_state.audit_data = None
-if 'selected_samples' not in st.session_state:
-    st.session_state.selected_samples = None
-
-st.title("🛡️ CA Audit Pro: Sampling & Tax Compliance")
-
-# --- SIDEBAR: CONFIGURATION ---
+# --- 2. SIDEBAR SETUP ---
 with st.sidebar:
-    st.header("⚙️ Audit Config")
-    materiality = st.number_input("Materiality Threshold (INR)", value=100000, step=10000)
-    conf_level = st.select_slider("Statistical Confidence Level", options=[0.90, 0.95, 0.99], value=0.95)
+    st.header("📌 Audit Configuration")
+    materiality = st.number_input("Materiality (INR)", value=100000)
+    uploaded_file = st.file_uploader("Upload Transaction File", type=['csv', 'xlsx'])
     
-    uploaded_file = st.file_uploader("Upload Client Data", type=['csv', 'xlsx'])
-    
-    # --- ENHANCED TEMPLATE ---
-    st.subheader("📥 Data Template")
+    # Professional Template
+    st.subheader("📥 Standard Template")
     template = pd.DataFrame({
-        'Invoice Date': ['2026-04-01'], 'Invoice No': ['INV-001'], 'Party Name': ['Example Corp'],
-        'Transaction Type': ['Professional (194J)'], 'Amount': [50000],
-        'CGST': [4500], 'SGST': [4500], 'IGST': [0], 'Cess': [0], 'Total Value': [59000]
+        'Invoice Date': ['2026-03-25'], 'Invoice No': ['INV/25/001'], 'Party Name': ['Audit Client'],
+        'TDS Section': ['194J'], 'Amount': [100000], 'CGST': [9000], 'SGST': [9000], 'IGST': [0],
+        'Cess': [0], 'Total Value': [118000]
     })
-    st.download_button("Download CSV Template", template.to_csv(index=False), "audit_template.csv")
+    st.download_button("Download Template", template.to_csv(index=False), "audit_template.csv")
 
-# --- FILE PROCESSING ---
+# --- 3. DATA PROCESSING ---
 if uploaded_file:
-    # Reset state if new file is uploaded
-    if "last_file" not in st.session_state or st.session_state.last_file != uploaded_file.name:
-        st.session_state.audit_data = None
-        st.session_state.selected_samples = None
-        st.session_state.last_file = uploaded_file.name
-
-    if st.session_state.audit_data is None:
+    if 'audit_data' not in st.session_state or st.session_state.get('filename') != uploaded_file.name:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('csv') else pd.read_excel(uploaded_file)
         df['Invoice Date'] = pd.to_datetime(df['Invoice Date'])
-        
-        # 1. Run Risk Engine
+        df['Quarter'] = df['Invoice Date'].apply(get_fiscal_quarter)
         df['Selection Reason'] = df.apply(lambda x: get_selection_reason(x, materiality), axis=1)
         
-        # 2. Tax Validation (Sum of GST vs Total)
-        if all(col in df.columns for col in ['Amount', 'CGST', 'SGST', 'IGST']):
-            df['Calc_Total'] = df['Amount'] + df['CGST'] + df['SGST'] + df['IGST'] + df.get('Cess', 0)
-            if 'Total Value' in df.columns:
-                df.loc[(df['Total Value'] - df['Calc_Total']).abs() > 1, 'Selection Reason'] += " | Tax Math Error"
-
+        # GST Integrity
+        df['Calc_Total'] = df['Amount'] + df['CGST'] + df['SGST'] + df['IGST'] + df.get('Cess', 0)
+        df.loc[(df['Total Value'] - df['Calc_Total']).abs() > 2, 'Selection Reason'] += " | GST Error"
+        
         df['Vouching Status'] = "Pending"
         df['Auditor Remarks'] = ""
         st.session_state.audit_data = df
+        st.session_state.filename = uploaded_file.name
 
     df = st.session_state.audit_data
 
-    # --- TOP METRICS ---
+    # --- 4. EXECUTIVE SUMMARY ---
+    st.title("📊 Audit Intelligence Dashboard")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Total Transactions", len(df))
-    m2.metric("Total Audit Value", f"₹{df['Amount'].sum():,.0f}")
-    m3.metric("High-Risk Items", len(df[df['Selection Reason'] != "Random Sample"]))
-    # Margin of Error Calculation (Simplified for display)
-    moe = (1.96 * (0.5 / np.sqrt(len(df)))) * 100 # Standard error formula
-    m4.metric("Pop. Margin of Error", f"{moe:.2f}%")
+    m1.metric("Population Size", len(df))
+    m2.metric("Total Turnover/Exp", f"₹{df['Amount'].sum():,.0f}")
+    q4_val = df[df['Quarter'] == "Q4 (Jan-Mar)"]['Amount'].sum()
+    m3.metric("Q4 Exposure", f"₹{q4_val:,.0f}", delta=f"Risk: High" if q4_val > (df['Amount'].sum()*0.3) else "Normal")
+    m4.metric("Flagged Items", len(df[df['Selection Reason'] != "Routine"]))
 
-    # --- SAMPLING CONTROLS ---
+    # --- 5. QUARTERLY TRENDS ---
     st.divider()
-    st.subheader("🎯 Sample Selection Criteria")
-    col1, col2 = st.columns(2)
-    with col1:
-        types = st.multiselect("Select Transaction Types", df['Transaction Type'].unique(), default=df['Transaction Type'].unique())
-    with col2:
-        num_samples = st.number_input("Additional Random Samples to Draw", min_value=1, value=10)
+    st.subheader("📅 Quarterly Trend & Periodicity Analysis")
+    q_data = df.groupby('Quarter')['Amount'].sum().reset_index()
+    fig_q = px.bar(q_data, x='Quarter', y='Amount', color='Quarter', title="Expense Distribution by Fiscal Quarter")
+    st.plotly_chart(fig_q, use_container_width=True)
 
-    if st.button("🚀 Generate Audit Working Paper"):
-        priority = df[(df['Transaction Type'].isin(types)) & (df['Selection Reason'] != "Random Sample")]
-        random_pool = df[(df['Transaction Type'].isin(types)) & (df['Selection Reason'] == "Random Sample")]
-        st.session_state.selected_samples = pd.concat([priority, random_pool.sample(n=min(len(random_pool), num_samples))])
+    # --- 6. SAMPLING & VOUCHING ---
+    st.divider()
+    st.subheader("🔍 Sampling Engine")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        sel_q = st.multiselect("Filter by Quarter", df['Quarter'].unique(), default=df['Quarter'].unique())
+    with col_b:
+        num_rand = st.number_input("Additional Random Samples", value=10)
 
-    # --- VOUCHING TABLE ---
-    if st.session_state.selected_samples is not None:
-        st.divider()
-        st.subheader("📋 Vouching Dashboard")
-        
-        # Progress Tracking
+    if st.button("Generate Working Paper"):
+        sub_df = df[df['Quarter'].isin(sel_q)]
+        priority = sub_df[sub_df['Selection Reason'] != "Routine"]
+        randoms = sub_df[sub_df['Selection Reason'] == "Routine"]
+        st.session_state.selected_samples = pd.concat([priority, randoms.sample(n=min(len(randoms), num_rand))])
+
+    if st.session_state.get('selected_samples') is not None:
         samples = st.session_state.selected_samples
-        done = len(samples[samples['Vouching Status'].isin(['Verified', 'GST Mismatch'])])
-        st.progress(done/len(samples))
         
+        st.write("### 📝 Vouching Dashboard")
         edited_df = st.data_editor(
             samples,
             column_config={
-                "Vouching Status": st.column_config.SelectboxColumn("Status", options=["Pending", "Verified", "Query", "TDS Issue", "GST Mismatch"]),
-                "Selection Reason": st.column_config.TextColumn("Risk Flags", width="medium"),
-                "Amount": st.column_config.NumberColumn("Base Amt", format="₹%d"),
-                "Auditor Remarks": st.column_config.TextColumn("Remarks", width="large")
+                "Vouching Status": st.column_config.SelectboxColumn("Status", options=["Pending", "Verified", "Query", "TDS Issue", "MSR Mismatch"]),
+                "Selection Reason": st.column_config.TextColumn("Audit Flags", width="medium"),
             },
-            disabled=["Invoice Date", "Party Name", "Amount", "CGST", "SGST", "IGST", "Selection Reason", "Invoice No"],
+            disabled=["Invoice Date", "Party Name", "Amount", "TDS Section", "CGST", "SGST", "IGST", "Quarter", "Selection Reason"],
             hide_index=True, use_container_width=True
         )
         st.session_state.selected_samples = edited_df
 
-        # --- VISUAL ANALYTICS ---
+        # --- 7. FINAL ANALYTICS & EXPORT ---
         st.divider()
         c1, c2 = st.columns(2)
         with c1:
-            st.write("### Sample Risk Profile")
-            st.plotly_chart(px.pie(edited_df, names='Selection Reason', hole=0.4), use_container_width=True)
+            st.write("**Section-wise Audit Progress**")
+            st.plotly_chart(px.strip(edited_df, x="Quarter", y="Amount", color="Vouching Status", hover_data=["Party Name"]))
         with c2:
-            st.write("### Party-wise Exposure")
-            st.plotly_chart(px.bar(edited_df, x='Party Name', y='Amount', color='Vouching Status'), use_container_width=True)
+            st.write("**Risk Reason Breakdown**")
+            st.plotly_chart(px.pie(edited_df, names="Selection Reason", hole=0.5))
 
-        st.download_button("💾 Export Workpaper to Excel", edited_df.to_csv(index=False), "Audit_Working_Paper_2026.csv")
+        st.download_button("💾 Export Verified Audit File", edited_df.to_csv(index=False), "Audit_Quarterly_Verified.csv")
