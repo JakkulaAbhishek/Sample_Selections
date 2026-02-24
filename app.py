@@ -9,7 +9,6 @@ from io import BytesIO
 from datetime import datetime, timedelta
 import calendar
 import warnings
-import json
 warnings.filterwarnings('ignore')
 
 # --- 1. ADVANCED UI CONFIGURATION ---
@@ -263,10 +262,14 @@ class MaterialityEngine:
             return df, 0, 0, value_column
         
         total_value = df[value_column].sum()
-        materiality_amount = total_value * (self.threshold_percent / 100)
+        materiality_amount = total_value * (self.threshold_percent / 100) if total_value > 0 else 0
         
         # Calculate materiality score for each transaction
-        df['materiality_score'] = df[value_column] / materiality_amount if materiality_amount > 0 else 0
+        if materiality_amount > 0:
+            df['materiality_score'] = df[value_column] / materiality_amount
+        else:
+            df['materiality_score'] = 0
+            
         df['materiality_level'] = 'Immaterial'
         df['materiality_weight'] = 0.5
         df['audit_priority'] = 'Low'
@@ -339,7 +342,7 @@ class SamplingEngine:
         
         # Calculate sampling interval
         total_value = df[value_column].sum()
-        interval = total_value / n
+        interval = total_value / n if n > 0 else total_value
         
         # Select samples based on cumulative value
         df_sorted = df.sort_values(value_column, ascending=False)
@@ -372,37 +375,32 @@ class TDSComplianceEngine:
         self.tds_rates = {
             # Section: (rate, threshold, description)
             '194C': (0.01, 30000, 'Contractors - Single Contract'),
-            '194C-2': (0.01, 100000, 'Contractors - Aggregate'),
             '194J': (0.10, 30000, 'Professional Services'),
             '194I': (0.10, 180000, 'Rent - Plant/Machinery'),
-            '194I-2': (0.10, 180000, 'Rent - Land/Building'),
             '194H': (0.05, 15000, 'Commission/Brokerage'),
             '194Q': (0.001, 5000000, 'TDS on Purchase of Goods'),
             '194IA': (0.01, 5000000, 'TDS on Property Purchase'),
             '194IB': (0.05, 50000, 'TDS on Rent (Individual)'),
             '194M': (0.05, 5000000, 'TDS on Contract/Commission'),
-            '194N': (0.02, 10000000, 'Cash Withdrawal Limit'),
         }
         
         self.penalty_rates = {
             'interest_1_5': 0.015,  # 1.5% per month
-            'interest_1': 0.01,      # 1% per month
-            'penalty_200': 200,       # Section 271H
-            'penalty_100': 100        # Section 271C
+            'interest_1': 0.01       # 1% per month
         }
     
-    def calculate_tds(self, df):
+    def calculate_tds(self, df, interest_months=3):
         """Calculate TDS requirements and identify shortfalls"""
         
         results = []
         
         for _, row in df.iterrows():
             section = str(row.get('TDS Section', 'NA')).strip().upper()
-            taxable = row.get('taxable value', 0)
-            tds_deducted = row.get('TDS deducted', 0)
+            taxable = float(row.get('taxable value', 0))
+            tds_deducted = float(row.get('TDS deducted', 0))
             
             # Get applicable rate
-            rate_info = self.tds_rates.get(section, (0.01, 0, 'Default Rate'))
+            rate_info = self.tds_rates.get(section, (0.01, 0))
             tds_rate = rate_info[0]
             threshold = rate_info[1]
             
@@ -415,8 +413,8 @@ class TDSComplianceEngine:
             # Calculate shortfall
             shortfall = max(0, tds_required - tds_deducted)
             
-            # Calculate interest (assuming 3 months delay)
-            interest = shortfall * self.penalty_rates['interest_1_5'] * 3
+            # Calculate interest
+            interest = shortfall * self.penalty_rates['interest_1_5'] * interest_months
             
             # Risk score (0-100)
             if tds_required > 0:
@@ -427,17 +425,17 @@ class TDSComplianceEngine:
                 risk_score = 0
             
             results.append({
-                'tds_required': tds_required,
-                'tds_shortfall': shortfall,
-                'interest_payable': interest,
-                'compliance_ratio': compliance_ratio * 100,
-                'risk_score': risk_score,
+                'tds_required': round(tds_required, 2),
+                'tds_shortfall': round(shortfall, 2),
+                'interest_payable': round(interest, 2),
+                'compliance_ratio': round(compliance_ratio * 100, 2),
+                'risk_score': round(risk_score, 2),
                 'penalty_applicable': shortfall > 0
             })
         
         return pd.DataFrame(results)
 
-# --- 7. SAMPLE EXCEL GENERATOR ---
+# --- 7. SAMPLE EXCEL GENERATOR (FIXED) ---
 def generate_sample_excel():
     """Generate sample Excel file for users to download"""
     
@@ -475,7 +473,11 @@ def generate_sample_excel():
     # Generate dates for the last 6 months
     end_date = datetime.now()
     start_date = end_date - timedelta(days=180)
-    dates = pd.date_range(start=start_date, end=end_date, freq='D')
+    date_list = []
+    current_date = start_date
+    while current_date <= end_date:
+        date_list.append(current_date)
+        current_date += timedelta(days=1)
     
     # Create dataframe
     data = []
@@ -485,7 +487,11 @@ def generate_sample_excel():
         party_idx = np.random.randint(0, len(parties_data))
         party_name, tds_section, tds_rate = parties_data[party_idx]
         
-        date = np.random.choice(dates)
+        # Fix: Convert datetime to string properly
+        date_idx = np.random.randint(0, len(date_list))
+        date_obj = date_list[date_idx]
+        date_str = date_obj.strftime('%d-%m-%Y')
+        
         invoice_no = f"INV-2024{invoice_counter:04d}"
         invoice_counter += 1
         
@@ -522,7 +528,7 @@ def generate_sample_excel():
             igst = gst_amount
         
         data.append([
-            date.strftime('%d-%m-%Y'),
+            date_str,
             party_name,
             invoice_no,
             gross_total,
@@ -540,9 +546,9 @@ def generate_sample_excel():
     ])
     
     # Sort by date
-    df['Date'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
-    df = df.sort_values('Date')
-    df['Date'] = df['Date'].dt.strftime('%d-%m-%Y')
+    df['Date_temp'] = pd.to_datetime(df['Date'], format='%d-%m-%Y')
+    df = df.sort_values('Date_temp')
+    df = df.drop('Date_temp', axis=1)
     
     # Save to BytesIO
     output = BytesIO()
@@ -559,12 +565,13 @@ def generate_sample_excel():
         })
         
         money_format = workbook.add_format({'num_format': '₹#,##0.00'})
+        date_format = workbook.add_format({'num_format': 'dd-mm-yyyy'})
         
         # Format columns
         for col_num, value in enumerate(df.columns.values):
             worksheet.write(0, col_num, value, header_format)
         
-        worksheet.set_column('A:A', 12)
+        worksheet.set_column('A:A', 12, date_format)
         worksheet.set_column('B:B', 30)
         worksheet.set_column('C:C', 15)
         worksheet.set_column('D:I', 15, money_format)
@@ -691,14 +698,17 @@ def main():
         
         # Sample Download Button
         st.markdown("### 📥 Sample Data")
-        sample_excel = generate_sample_excel()
-        st.download_button(
-            label="📊 Download Sample Excel Template",
-            data=sample_excel,
-            file_name="TDS_Sample_Data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        try:
+            sample_excel = generate_sample_excel()
+            st.download_button(
+                label="📊 Download Sample Excel Template",
+                data=sample_excel,
+                file_name="TDS_Sample_Data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.error(f"Error generating sample: {str(e)}")
         
         st.markdown("---")
         
@@ -712,13 +722,6 @@ def main():
                 step=0.1,
                 help="Percentage of total value for materiality"
             )
-            
-            risk_appetite = st.select_slider(
-                "Risk Appetite",
-                options=['Conservative', 'Moderate', 'Aggressive'],
-                value='Moderate',
-                help="Higher risk appetite = lower sample size"
-            )
         
         # Sampling Configuration
         with st.expander("📊 Sampling Strategy", expanded=True):
@@ -730,8 +733,7 @@ def main():
                     "Monetary Unit Sampling (MUS)",
                     "Stratified Sampling",
                     "Systematic Sampling",
-                    "Simple Random Sampling",
-                    "Judgmental Sampling"
+                    "Simple Random Sampling"
                 ]
             )
             
@@ -769,8 +771,6 @@ def main():
                 max_value=12,
                 value=3
             )
-            
-            include_penalty = st.checkbox("Include Penalty Calculations", value=True)
     
     # File Upload Section
     st.markdown("### 📤 Upload Data")
@@ -845,11 +845,21 @@ def main():
                 if 'TDS Section' not in df.columns:
                     df['TDS Section'] = 'NA'
                 
+                if 'Party name' not in df.columns:
+                    df['Party name'] = 'Unknown'
+                
+                if 'Invoice no' not in df.columns:
+                    df['Invoice no'] = [f'INV-{i:04d}' for i in range(len(df))]
+                
+                # Process dates if available
                 if 'Date' in df.columns:
-                    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-                    df['Month'] = df['Date'].dt.month
-                    df['Year'] = df['Date'].dt.year
-                    df['Quarter'] = df['Date'].dt.quarter
+                    try:
+                        df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+                        df['Month'] = df['Date'].dt.month
+                        df['Year'] = df['Date'].dt.year
+                        df['Quarter'] = df['Date'].dt.quarter
+                    except:
+                        pass
                 
                 # Calculate materiality
                 materiality_engine = MaterialityEngine(materiality_threshold)
@@ -864,35 +874,15 @@ def main():
             metric_cols = st.columns(5)
             
             critical_count = len(df[df['materiality_level'] == 'Critical']) if 'materiality_level' in df.columns else 0
-            high_count = len(df[df['materiality_level'] == 'High']) if 'materiality_level' in df.columns else 0
-            medium_count = len(df[df['materiality_level'] == 'Medium']) if 'materiality_level' in df.columns else 0
             
             with metric_cols[0]:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4 style="color:#666; margin:0;">Total Population</h4>
-                    <h2 style="color:#667eea; margin:10px 0;">{len(df):,}</h2>
-                    <p style="color:#999; margin:0;">Transactions</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("Total Population", f"{len(df):,}")
             
             with metric_cols[1]:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4 style="color:#666; margin:0;">Total Value</h4>
-                    <h2 style="color:#667eea; margin:10px 0;">₹{total_value:,.0f}</h2>
-                    <p style="color:#999; margin:0;">Taxable Amount</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("Total Value", f"₹{total_value:,.0f}")
             
             with metric_cols[2]:
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4 style="color:#666; margin:0;">Critical Items</h4>
-                    <h2 style="color:#f43b47; margin:10px 0;">{critical_count}</h2>
-                    <p style="color:#999; margin:0;">High Risk</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("Critical Items", f"{critical_count}")
             
             with metric_cols[3]:
                 # Calculate sample size based on selected method
@@ -904,37 +894,22 @@ def main():
                         len(df), confidence_level, margin_of_error
                     )
                 
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4 style="color:#666; margin:0;">Target Sample</h4>
-                    <h2 style="color:#00b09b; margin:10px 0;">{sample_size_calc}</h2>
-                    <p style="color:#999; margin:0;">@ {(sample_size_calc/len(df)*100):.1f}% Coverage</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.metric("Target Sample", f"{sample_size_calc}", 
+                         f"{(sample_size_calc/len(df)*100):.1f}%")
             
             with metric_cols[4]:
-                tds_shortfall_est = df['TDS deducted'].sum() * 0.15  # Estimate
-                st.markdown(f"""
-                <div class="metric-card">
-                    <h4 style="color:#666; margin:0;">Est. TDS Shortfall</h4>
-                    <h2 style="color:#f43b47; margin:10px 0;">₹{tds_shortfall_est:,.0f}</h2>
-                    <p style="color:#999; margin:0;">Projected</p>
-                </div>
-                """, unsafe_allow_html=True)
+                tds_shortfall_est = df['TDS deducted'].sum() * 0.15 if 'TDS deducted' in df.columns else 0
+                st.metric("Est. TDS Shortfall", f"₹{tds_shortfall_est:,.0f}")
             
-            # Materiality Distribution (Fixed for JSON serialization)
+            # Materiality Distribution
             st.markdown("### 🎯 Materiality Analysis")
             
             col1, col2 = st.columns([1, 1])
             
             with col1:
-                # Materiality Distribution Chart - Using simple counts instead of bins
+                # Materiality Distribution Chart
                 materiality_dist = df['materiality_level'].value_counts().reset_index()
                 materiality_dist.columns = ['Level', 'Count']
-                
-                # Convert to regular Python types for JSON serialization
-                materiality_dist['Level'] = materiality_dist['Level'].astype(str)
-                materiality_dist['Count'] = materiality_dist['Count'].astype(int)
                 
                 colors = {
                     'Critical': '#f43b47',
@@ -958,9 +933,7 @@ def main():
                 fig.update_layout(
                     title="Transaction Distribution by Materiality",
                     showlegend=False,
-                    height=400,
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)'
+                    height=400
                 )
                 
                 st.plotly_chart(fig, use_container_width=True)
@@ -970,27 +943,16 @@ def main():
                 value_by_materiality = df.groupby('materiality_level')['taxable value'].sum().reset_index()
                 value_by_materiality.columns = ['Level', 'Value']
                 
-                # Convert to regular Python types
-                value_by_materiality['Level'] = value_by_materiality['Level'].astype(str)
-                value_by_materiality['Value'] = value_by_materiality['Value'].astype(float)
-                
                 fig = px.bar(
                     value_by_materiality,
                     x='Level',
                     y='Value',
                     color='Level',
                     color_discrete_map=colors,
-                    title="Value Distribution by Materiality Level",
-                    labels={'Value': 'Amount (₹)', 'Level': 'Materiality Level'}
+                    title="Value Distribution by Materiality Level"
                 )
                 
-                fig.update_layout(
-                    height=400,
-                    showlegend=False,
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    paper_bgcolor='rgba(0,0,0,0)'
-                )
-                
+                fig.update_layout(height=400, showlegend=False)
                 st.plotly_chart(fig, use_container_width=True)
             
             # Sampling Execution
@@ -1014,7 +976,7 @@ def main():
             
             # Calculate TDS compliance
             tds_engine = TDSComplianceEngine()
-            tds_results = tds_engine.calculate_tds(sample_df)
+            tds_results = tds_engine.calculate_tds(sample_df, interest_months)
             sample_df = pd.concat([sample_df.reset_index(drop=True), tds_results], axis=1)
             
             # Sample Results Dashboard
@@ -1026,32 +988,16 @@ def main():
             total_shortfall = sample_df['tds_shortfall'].sum() if 'tds_shortfall' in sample_df.columns else 0
             
             with col1:
-                st.metric(
-                    "Sample Value",
-                    f"₹{sample_value:,.0f}",
-                    f"{(sample_value/total_value*100):.1f}% of population" if total_value > 0 else "0%"
-                )
+                st.metric("Sample Value", f"₹{sample_value:,.0f}")
             
             with col2:
-                st.metric(
-                    "Critical Items in Sample",
-                    f"{critical_in_sample}",
-                    f"{(critical_in_sample/len(sample_df)*100):.1f}% of sample" if len(sample_df) > 0 else "0%"
-                )
+                st.metric("Critical Items", f"{critical_in_sample}")
             
             with col3:
-                st.metric(
-                    "Average Risk Score",
-                    f"{avg_risk:.1f}",
-                    delta=None
-                )
+                st.metric("Avg Risk Score", f"{avg_risk:.1f}")
             
             with col4:
-                st.metric(
-                    "TDS Shortfall",
-                    f"₹{total_shortfall:,.0f}",
-                    "In Sample"
-                )
+                st.metric("TDS Shortfall", f"₹{total_shortfall:,.0f}")
             
             # Detailed Sample View
             with st.expander("🔍 View Sample Details", expanded=True):
@@ -1060,126 +1006,7 @@ def main():
                 display_cols = [col for col in display_cols if col in sample_df.columns]
                 
                 if display_cols:
-                    # Convert to regular Python types for display
-                    display_df = sample_df[display_cols].copy()
-                    
-                    # Format numeric columns
-                    for col in display_df.columns:
-                        if display_df[col].dtype in ['float64', 'int64']:
-                            display_df[col] = display_df[col].astype(float)
-                    
-                    st.dataframe(display_df, use_container_width=True, height=400)
-            
-            # Advanced Analytics
-            st.markdown("### 📊 Advanced Audit Analytics")
-            
-            tab1, tab2, tab3 = st.tabs([
-                "🎯 Risk Analysis",
-                "💰 TDS Compliance",
-                "📈 Trend Analysis"
-            ])
-            
-            with tab1:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # Risk Distribution - Fixed for JSON
-                    if 'risk_score' in sample_df.columns:
-                        risk_categories = pd.cut(sample_df['risk_score'], 
-                                                bins=[0, 25, 50, 75, 100],
-                                                labels=['Low Risk', 'Medium Risk', 'High Risk', 'Critical Risk'])
-                        risk_dist = risk_categories.value_counts().reset_index()
-                        risk_dist.columns = ['Risk Level', 'Count']
-                        
-                        # Convert to regular Python types
-                        risk_dist['Risk Level'] = risk_dist['Risk Level'].astype(str)
-                        risk_dist['Count'] = risk_dist['Count'].astype(int)
-                        
-                        fig = px.pie(
-                            risk_dist,
-                            values='Count',
-                            names='Risk Level',
-                            title="Risk Distribution in Sample",
-                            color_discrete_sequence=['#00b09b', '#f9d423', '#f43b47', '#453a94']
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with col2:
-                    # Materiality vs Risk
-                    if all(col in sample_df.columns for col in ['taxable value', 'risk_score', 'materiality_level']):
-                        scatter_data = sample_df[['taxable value', 'risk_score', 'materiality_level']].copy()
-                        scatter_data['taxable value'] = scatter_data['taxable value'].astype(float)
-                        scatter_data['risk_score'] = scatter_data['risk_score'].astype(float)
-                        scatter_data['materiality_level'] = scatter_data['materiality_level'].astype(str)
-                        
-                        fig = px.scatter(
-                            scatter_data,
-                            x='taxable value',
-                            y='risk_score',
-                            color='materiality_level',
-                            title="Materiality vs Risk Analysis",
-                            labels={'taxable value': 'Transaction Value (₹)', 'risk_score': 'Risk Score'},
-                            color_discrete_map=colors
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-            
-            with tab2:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    # TDS Shortfall by Section
-                    if all(col in sample_df.columns for col in ['TDS Section', 'tds_shortfall']):
-                        shortfall_data = sample_df.groupby('TDS Section')['tds_shortfall'].sum().reset_index()
-                        shortfall_data.columns = ['Section', 'Shortfall']
-                        shortfall_data['Section'] = shortfall_data['Section'].astype(str)
-                        shortfall_data['Shortfall'] = shortfall_data['Shortfall'].astype(float)
-                        
-                        fig = px.bar(
-                            shortfall_data,
-                            x='Section',
-                            y='Shortfall',
-                            title="TDS Shortfall by Section",
-                            color='Shortfall',
-                            color_continuous_scale='Reds'
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                
-                with col2:
-                    # Compliance Ratio
-                    if 'compliance_ratio' in sample_df.columns and 'Party name' in sample_df.columns:
-                        compliance_data = sample_df[['Party name', 'compliance_ratio']].head(10).copy()
-                        compliance_data['Party name'] = compliance_data['Party name'].astype(str)
-                        compliance_data['compliance_ratio'] = compliance_data['compliance_ratio'].astype(float)
-                        
-                        fig = px.bar(
-                            compliance_data,
-                            x='Party name',
-                            y='compliance_ratio',
-                            title="Top 10 Parties - TDS Compliance Ratio",
-                            color='compliance_ratio',
-                            color_continuous_scale='Viridis'
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-            
-            with tab3:
-                if 'Date' in df.columns and 'taxable value' in df.columns:
-                    # Monthly trends - Fixed for JSON
-                    df_copy = df.copy()
-                    df_copy['Month'] = pd.to_datetime(df_copy['Date']).dt.month
-                    df_copy['Year'] = pd.to_datetime(df_copy['Date']).dt.year
-                    
-                    monthly_data = df_copy.groupby(['Year', 'Month'])['taxable value'].sum().reset_index()
-                    monthly_data['Period'] = monthly_data['Month'].astype(str) + '-' + monthly_data['Year'].astype(str)
-                    monthly_data['taxable value'] = monthly_data['taxable value'].astype(float)
-                    
-                    fig = px.line(
-                        monthly_data,
-                        x='Period',
-                        y='taxable value',
-                        title="Monthly Transaction Value Trend",
-                        markers=True
-                    )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.dataframe(sample_df[display_cols], use_container_width=True, height=400)
             
             # Export Section
             st.markdown("### 📥 Export Results")
