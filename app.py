@@ -387,7 +387,7 @@ class SamplingEngine:
             return df.sample(n=min(n, len(df)), weights=prior, random_state=42)
         return df.sample(n=min(n, len(df)), random_state=42)
 
-# --- EXCEL EXPORTER WITH FORMULAS ---
+# --- EXCEL EXPORTER WITH FORMULAS (FIXED) ---
 class ExcelExporter:
     @staticmethod
     def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold):
@@ -421,7 +421,7 @@ class ExcelExporter:
                 ws.write(0, col_num, col_name, header_fmt)
 
             # Total row for taxable value (for materiality)
-            total_row = len(df_raw) + 2
+            total_row = len(df_raw) + 2  # row index where total is written (Excel row number)
             taxable_col_idx = raw_cols.index('taxable value')
             taxable_col_letter = xlsxwriter.utility.xl_col_to_name(taxable_col_idx)
             ws.write(total_row, 0, 'TOTALS', header_fmt)
@@ -441,7 +441,7 @@ class ExcelExporter:
                 ('Interest Payable', f'=N{{row}}*0.015*3'),
                 ('Net Payable', f'=E{{row}}+K{{row}}-I{{row}}'),
                 ('TDS Compliance %', f'=IF(M{{row}}=0,100,I{{row}}/M{{row}}*100)'),
-                ('Materiality Score', f'=E{{row}}/${taxable_col_letter}${total_row+1}/$B$1'),
+                ('Materiality Score', f'=E{{row}}/${taxable_col_letter}${total_row}/$B$1'),  # FIXED: total_row instead of total_row+1
                 ('Materiality Level', '=IF(P{row}>=0.5,"🔥 CRITICAL",IF(P{row}>=0.2,"⚡ HIGH",IF(P{row}>=0.1,"💫 MEDIUM",IF(P{row}>=0.05,"🌟 LOW","📦 IMMATERIAL"))))'),
                 ('Audit Priority', '=IF(Q{row}="🔥 CRITICAL",1,IF(Q{row}="⚡ HIGH",2,IF(Q{row}="💫 MEDIUM",3,IF(Q{row}="🌟 LOW",4,5))))'),
                 ('Compliance Status', '=IF(N{row}=0,"✅ FULLY COMPLIANT",IF(I{row}>0,"⚠️ PARTIAL SHORTFALL","❌ NOT DEDUCTED"))')
@@ -453,7 +453,7 @@ class ExcelExporter:
                 for row_num in range(2, total_row):
                     formula = formula_template.format(row=row_num)
                     # Use appropriate format
-                    if '₹' in col_name or 'TDS' in col_name and 'Rate' not in col_name and 'Score' not in col_name:
+                    if '₹' in col_name or ('TDS' in col_name and 'Rate' not in col_name and 'Score' not in col_name):
                         fmt = money_fmt
                     elif '%' in col_name:
                         fmt = percent_fmt
@@ -525,51 +525,6 @@ class ExcelExporter:
             mat_ws = writer.sheets['Materiality Analysis']
             for col_num, col_name in enumerate(mat_summary.columns):
                 mat_ws.write(0, col_num, col_name, header_fmt)
-
-            # --- Sampling Methods sheet ---
-            methods_data = {
-                'Category': ['Probability']*8 + ['Non-Probability']*8 + ['Audit-Specific']*4 + ['Advanced']*6,
-                'Method': [
-                    'Simple Random','Systematic','Stratified','Cluster','Multistage','Multiphase','Area','PPS',
-                    'Convenience','Judgmental','Purposive','Quota','Snowball','Volunteer','Haphazard','Consecutive',
-                    'Statistical','Non-Statistical','MUS','Block',
-                    'Sequential','Adaptive','Reservoir','Acceptance','Bootstrap','Bayesian'
-                ],
-                'Selected': ['Yes' if m in selected_methods else 'No' for m in [
-                    'Simple Random','Systematic','Stratified','Cluster','Multistage','Multiphase','Area','PPS',
-                    'Convenience','Judgmental','Purposive','Quota','Snowball','Volunteer','Haphazard','Consecutive',
-                    'Statistical','Non-Statistical','MUS','Block',
-                    'Sequential','Adaptive','Reservoir','Acceptance','Bootstrap','Bayesian'
-                ]]
-            }
-            methods_df = pd.DataFrame(methods_data)
-            methods_df.to_excel(writer, sheet_name='Sampling Methods', index=False)
-            meth_ws = writer.sheets['Sampling Methods']
-            for col_num, col_name in enumerate(methods_df.columns):
-                meth_ws.write(0, col_num, col_name, header_fmt)
-
-            # --- Formula Reference ---
-            formula_ref = pd.DataFrame({
-                'Formula': ['Total GST','GST Rate %','Std TDS Rate %','Applied TDS Rate %','Required TDS','TDS Shortfall','Interest Payable','Net Payable','TDS Compliance %','Materiality Score'],
-                'Calculation': [
-                    'CGST+SGST+IGST',
-                    '(Total GST / Taxable Value) * 100',
-                    'VLOOKUP from TDSRates sheet',
-                    '(TDS Deducted / Taxable Value) * 100',
-                    'Taxable Value * Std TDS Rate % / 100',
-                    'MAX(0, Required TDS - Actual TDS)',
-                    'Shortfall * 1.5% * 3',
-                    'Taxable Value + Total GST - TDS Deducted',
-                    '(Actual TDS / Required TDS) * 100',
-                    'Taxable Value / (Total Taxable * Threshold %)'
-                ]
-            })
-            formula_ref.to_excel(writer, sheet_name='Formula Reference', index=False)
-            ref_ws = writer.sheets['Formula Reference']
-            for col_num, col_name in enumerate(formula_ref.columns):
-                ref_ws.write(0, col_num, col_name, header_fmt)
-            ref_ws.set_column('A:A', 30)
-            ref_ws.set_column('B:B', 60)
 
             # --- Add charts to Executive Summary ---
             # Chart 1: Materiality Distribution Pie
@@ -871,8 +826,6 @@ def main():
                         <li>🏢 Party-wise Analysis</li>
                         <li>💰 TDS Summary by Section</li>
                         <li>📈 Materiality Analysis</li>
-                        <li>📋 Sampling Methods Used</li>
-                        <li>🧮 Formula Reference Sheet</li>
                         <li>📊 Embedded Charts (Pie, Bar, Column)</li>
                     </ul>
                 </div>
