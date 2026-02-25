@@ -387,7 +387,7 @@ class SamplingEngine:
             return df.sample(n=min(n, len(df)), weights=prior, random_state=42)
         return df.sample(n=min(n, len(df)), random_state=42)
 
-# --- EXCEL EXPORTER WITH FORMULAS (FIXED) ---
+# --- EXCEL EXPORTER WITH FORMULAS (UPDATED) ---
 class ExcelExporter:
     @staticmethod
     def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold):
@@ -400,66 +400,110 @@ class ExcelExporter:
             percent_fmt = workbook.add_format({'num_format':'0.00%'})
             date_fmt = workbook.add_format({'num_format':'dd-mm-yyyy'})
 
-            # --- TDS Rates sheet for VLOOKUP ---
-            rates_df = pd.DataFrame({
-                'Section': ['194C','194J','194I','194H','194Q'],
-                'Rate %': [1.0, 10.0, 10.0, 5.0, 0.1]
-            })
-            rates_df.to_excel(writer, sheet_name='TDSRates', index=False)
-            rates_ws = writer.sheets['TDSRates']
-            for col_num, value in enumerate(rates_df.columns):
-                rates_ws.write(0, col_num, value, header_fmt)
-
-            # --- Complete Data sheet with formulas ---
+            # --- 1. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
             df_raw = df[raw_cols].copy()
             df_raw.to_excel(writer, sheet_name='Complete Data', index=False, startrow=1)
-            ws = writer.sheets['Complete Data']
-
-            # Write raw headers
+            ws_raw = writer.sheets['Complete Data']
+            # Write headers
             for col_num, col_name in enumerate(raw_cols):
-                ws.write(0, col_num, col_name, header_fmt)
+                ws_raw.write(0, col_num, col_name, header_fmt)
+            # Apply date format to Date column (col 0)
+            ws_raw.set_column(0, 0, 15, date_fmt)
+            # Set column widths
+            ws_raw.set_column(1, 1, 30)  # Party name
+            ws_raw.set_column(2, 2, 20)  # Invoice no
+            ws_raw.set_column(3, 9, 15, money_fmt)  # monetary columns
 
-            # Total row for taxable value (for materiality)
-            total_row = len(df_raw) + 2  # row index where total is written (Excel row number)
-            taxable_col_idx = raw_cols.index('taxable value')
-            taxable_col_letter = xlsxwriter.utility.xl_col_to_name(taxable_col_idx)
-            ws.write(total_row, 0, 'TOTALS', header_fmt)
-            ws.write_formula(total_row, taxable_col_idx, f'=SUM({taxable_col_letter}2:{taxable_col_letter}{total_row-1})', money_fmt)
-
-            # Materiality threshold in cell B1 (as decimal)
-            ws.write(0, 1, materiality_threshold/100, percent_fmt)
-
-            # Formula columns after raw data
-            formula_defs = [
-                ('Total GST', f'=F{{row}}+G{{row}}+H{{row}}'),
-                ('GST Rate %', f'=IF(E{{row}}=0,0,K{{row}}/E{{row}}*100)'),
-                ('Std TDS Rate %', '=VLOOKUP(J{row},TDSRates!$A$2:$B$6,2,FALSE)'),
-                ('Applied TDS Rate %', f'=IF(E{{row}}=0,0,I{{row}}/E{{row}}*100)'),
-                ('Required TDS', f'=E{{row}}*L{{row}}/100'),
-                ('TDS Shortfall', f'=MAX(0,M{{row}}-I{{row}})'),
-                ('Interest Payable', f'=N{{row}}*0.015*3'),
-                ('Net Payable', f'=E{{row}}+K{{row}}-I{{row}}'),
-                ('TDS Compliance %', f'=IF(M{{row}}=0,100,I{{row}}/M{{row}}*100)'),
-                ('Materiality Score', f'=E{{row}}/${taxable_col_letter}${total_row}/$B$1'),  # FIXED: total_row instead of total_row+1
-                ('Materiality Level', '=IF(P{row}>=0.5,"🔥 CRITICAL",IF(P{row}>=0.2,"⚡ HIGH",IF(P{row}>=0.1,"💫 MEDIUM",IF(P{row}>=0.05,"🌟 LOW","📦 IMMATERIAL"))))'),
-                ('Audit Priority', '=IF(Q{row}="🔥 CRITICAL",1,IF(Q{row}="⚡ HIGH",2,IF(Q{row}="💫 MEDIUM",3,IF(Q{row}="🌟 LOW",4,5))))'),
-                ('Compliance Status', '=IF(N{row}=0,"✅ FULLY COMPLIANT",IF(I{row}>0,"⚠️ PARTIAL SHORTFALL","❌ NOT DEDUCTED"))')
+            # --- 2. Analysis Sheet (derived columns with formulas) ---
+            ws_analysis = workbook.add_worksheet('Analysis')
+            # Write headers for Analysis
+            analysis_headers = [
+                'Party name', 'Invoice no', 'Taxable Value', 'TDS Section', 'TDS Deducted',
+                'Total GST', 'GST Rate %', 'Std TDS Rate %', 'Applied TDS Rate %',
+                'Required TDS', 'TDS Shortfall', 'Interest Payable', 'Net Payable',
+                'TDS Compliance %', 'Materiality Score', 'Materiality Level',
+                'Audit Priority', 'Compliance Status'
             ]
+            for col_num, header in enumerate(analysis_headers):
+                ws_analysis.write(0, col_num, header, header_fmt)
 
-            start_formula_col = len(raw_cols)
-            for col_idx, (col_name, formula_template) in enumerate(formula_defs):
-                ws.write(0, start_formula_col + col_idx, col_name, header_fmt)
-                for row_num in range(2, total_row):
-                    formula = formula_template.format(row=row_num)
-                    # Use appropriate format
-                    if '₹' in col_name or ('TDS' in col_name and 'Rate' not in col_name and 'Score' not in col_name):
-                        fmt = money_fmt
-                    elif '%' in col_name:
-                        fmt = percent_fmt
-                    else:
-                        fmt = None
-                    ws.write_formula(row_num-1, start_formula_col + col_idx, formula, fmt)
+            # Place total taxable value in cell Z1 (for materiality score denominator)
+            ws_analysis.write_formula('Z1', '=SUM(\'Complete Data\'!E:E)', money_fmt)
+            # Place materiality threshold (as decimal) in cell B1
+            ws_analysis.write(0, 1, materiality_threshold/100, percent_fmt)  # B1
+
+            # Write formulas for each row (from row 2 onward)
+            last_row = len(df_raw) + 1  # because raw data starts at row 2 in Complete Data sheet
+            for row in range(2, last_row + 1):
+                # References to Complete Data columns:
+                # B = Party name (col 1)
+                # C = Invoice no (col 2)
+                # E = taxable value (col 4)
+                # J = TDS Section (col 9)
+                # I = TDS deducted (col 8)
+                # F = Input CGST (col 5), G = Input SGST (col 6), H = Input IGST (col 7)
+                # We'll use Excel cell references: 'Complete Data'!B{row}, etc.
+
+                # Party name (A)
+                ws_analysis.write_formula(row-1, 0, f'=\'Complete Data\'!B{row}')
+                # Invoice no (B)
+                ws_analysis.write_formula(row-1, 1, f'=\'Complete Data\'!C{row}')
+                # Taxable Value (C)
+                ws_analysis.write_formula(row-1, 2, f'=\'Complete Data\'!E{row}')
+                # TDS Section (D)
+                ws_analysis.write_formula(row-1, 3, f'=\'Complete Data\'!J{row}')
+                # TDS Deducted (E)
+                ws_analysis.write_formula(row-1, 4, f'=\'Complete Data\'!I{row}')
+                # Total GST (F) = F+G+H from Complete Data
+                ws_analysis.write_formula(row-1, 5, f'=\'Complete Data\'!F{row}+\'Complete Data\'!G{row}+\'Complete Data\'!H{row}')
+                # GST Rate % (G) = IF(C{row}=0,0,F{row}/C{row}*100)
+                ws_analysis.write_formula(row-1, 6, f'=IF(C{row}=0,0,F{row}/C{row}*100)')
+                # Std TDS Rate % (H) using nested IF based on D{row}
+                ws_analysis.write_formula(row-1, 7,
+                    '=IF(D{row}="194C",1,IF(D{row}="194J",10,IF(D{row}="194I",10,IF(D{row}="194H",5,IF(D{row}="194Q",0.1,1)))))'.format(row=row))
+                # Applied TDS Rate % (I) = IF(C{row}=0,0,E{row}/C{row}*100)
+                ws_analysis.write_formula(row-1, 8, f'=IF(C{row}=0,0,E{row}/C{row}*100)')
+                # Required TDS (J) = C{row} * H{row} / 100
+                ws_analysis.write_formula(row-1, 9, f'=C{row}*H{row}/100')
+                # TDS Shortfall (K) = MAX(0, J{row} - E{row})
+                ws_analysis.write_formula(row-1, 10, f'=MAX(0,J{row}-E{row})')
+                # Interest Payable (L) = K{row} * 0.015 * 3
+                ws_analysis.write_formula(row-1, 11, f'=K{row}*0.015*3')
+                # Net Payable (M) = C{row} + F{row} - E{row}
+                ws_analysis.write_formula(row-1, 12, f'=C{row}+F{row}-E{row}')
+                # TDS Compliance % (N) = IF(J{row}=0,100,MIN(100,E{row}/J{row}*100))
+                ws_analysis.write_formula(row-1, 13, f'=IF(J{row}=0,100,MIN(100,E{row}/J{row}*100))')
+                # Materiality Score (O) = C{row} / $Z$1 / $B$1
+                ws_analysis.write_formula(row-1, 14, f'=C{row}/$Z$1/$B$1')
+                # Materiality Level (P) based on O{row}
+                ws_analysis.write_formula(row-1, 15,
+                    '=IF(O{row}>=0.5,"🔥 CRITICAL",IF(O{row}>=0.2,"⚡ HIGH",IF(O{row}>=0.1,"💫 MEDIUM",IF(O{row}>=0.05,"🌟 LOW","📦 IMMATERIAL"))))'.format(row=row))
+                # Audit Priority (Q) based on P{row}
+                ws_analysis.write_formula(row-1, 16,
+                    '=IF(P{row}="🔥 CRITICAL",1,IF(P{row}="⚡ HIGH",2,IF(P{row}="💫 MEDIUM",3,IF(P{row}="🌟 LOW",4,5))))'.format(row=row))
+                # Compliance Status (R) based on K{row} and E{row}
+                ws_analysis.write_formula(row-1, 17,
+                    '=IF(K{row}=0,"✅ FULLY COMPLIANT",IF(E{row}>0,"⚠️ PARTIAL SHORTFALL","❌ NOT DEDUCTED"))'.format(row=row))
+
+            # Apply formatting to Analysis columns
+            ws_analysis.set_column(0, 1, 30)   # Party, Invoice
+            ws_analysis.set_column(2, 2, 15, money_fmt)  # Taxable Value
+            ws_analysis.set_column(3, 3, 12)   # TDS Section
+            ws_analysis.set_column(4, 4, 15, money_fmt)  # TDS Deducted
+            ws_analysis.set_column(5, 5, 15, money_fmt)  # Total GST
+            ws_analysis.set_column(6, 6, 12, percent_fmt)  # GST Rate %
+            ws_analysis.set_column(7, 7, 12, percent_fmt)  # Std TDS Rate %
+            ws_analysis.set_column(8, 8, 15, percent_fmt)  # Applied TDS Rate %
+            ws_analysis.set_column(9, 9, 15, money_fmt)  # Required TDS
+            ws_analysis.set_column(10, 10, 15, money_fmt)  # TDS Shortfall
+            ws_analysis.set_column(11, 11, 15, money_fmt)  # Interest Payable
+            ws_analysis.set_column(12, 12, 15, money_fmt)  # Net Payable
+            ws_analysis.set_column(13, 13, 15, percent_fmt)  # TDS Compliance %
+            ws_analysis.set_column(14, 14, 15)  # Materiality Score
+            ws_analysis.set_column(15, 15, 20)  # Materiality Level
+            ws_analysis.set_column(16, 16, 12)  # Audit Priority
+            ws_analysis.set_column(17, 17, 25)  # Compliance Status
 
             # --- Executive Summary (no gradient) ---
             total_val = df['taxable value'].sum()
@@ -583,10 +627,25 @@ class ExcelExporter:
             # Chart 4: Sample Composition
             chart4 = workbook.add_chart({'type':'pie'})
             samp_comp = sample_df['Materiality Level'].value_counts()
+            # For chart data, we need to write sample composition somewhere; we'll put it in Sample Data sheet at the end
+            # But we can also reference the Sample Data sheet columns directly if they contain the materiality level.
+            # However, Sample Data sheet has all columns, including Materiality Level. So we can use that.
+            # We'll add a small summary table in Sample Data sheet for the chart, or we can reference the existing data.
+            # Easiest: create a small summary in Sample Data sheet for the pie chart.
+            # Let's write sample composition in Sample Data sheet starting at row 2 in columns AF and AG (or just use existing column AC? We'll use AF).
+            # But we don't want to clutter. Instead, we can reference the Materiality Level column directly in the chart by using a formula range.
+            # Since Materiality Level is a column in Sample Data, we can use that. But pie chart requires categories and values, so we need a frequency table.
+            # We'll add a small table in Sample Data sheet for the chart.
+            sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
+            sample_mat_summary.columns = ['Level','Count']
+            # Write this summary to Sample Data sheet starting at row 2 in columns Z and AA (for example)
+            for i, row in sample_mat_summary.iterrows():
+                sample_ws.write(i+1, 25, row['Level'])  # col Z
+                sample_ws.write(i+1, 26, row['Count'])  # col AA
             chart4.add_series({
                 'name':'Sample Composition',
-                'categories':'=Sample Data!$AF$2:$AF${}'.format(len(samp_comp)+1),
-                'values':'=Sample Data!$AF$2:$AF${}'.format(len(samp_comp)+1),
+                'categories':'=Sample Data!$Z$2:$Z${}'.format(len(sample_mat_summary)+1),
+                'values':'=Sample Data!$AA$2:$AA${}'.format(len(sample_mat_summary)+1),
                 'data_labels':{'percentage':True}
             })
             chart4.set_title({'name':'Sample Composition by Materiality'})
@@ -806,7 +865,7 @@ def main():
                         <li>✅ TDS Shortfall = MAX(0, Required TDS - Actual TDS)</li>
                         <li>✅ Interest Payable = Shortfall × 1.5% × 3 months</li>
                         <li>✅ Net Payable = Taxable Value + Total GST - TDS Deducted</li>
-                        <li>✅ TDS Compliance % = (Actual TDS / Required TDS) × 100</li>
+                        <li>✅ TDS Compliance % = (Actual TDS / Required TDS) × 100 (capped at 100%)</li>
                         <li>✅ Materiality Score = Taxable Value / (Total Taxable × Threshold %)</li>
                     </ul>
                 </div>
@@ -821,7 +880,8 @@ def main():
                     <h4>Export will include:</h4>
                     <ul>
                         <li>📊 Executive Summary with Charts</li>
-                        <li>📑 Complete Data with Formulas</li>
+                        <li>📑 Complete Data (raw uploaded columns)</li>
+                        <li>📈 Analysis Sheet with all derived formulas</li>
                         <li>🔍 Sample Data from All Methods</li>
                         <li>🏢 Party-wise Analysis</li>
                         <li>💰 TDS Summary by Section</li>
