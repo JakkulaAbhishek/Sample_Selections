@@ -78,7 +78,8 @@ class DataProcessor:
         df['GST Rate %'] = (df['Total GST'] / df['taxable value'].replace(0, np.nan)) * 100
         df['GST Rate %'] = df['GST Rate %'].fillna(0).round(2)
 
-        # Standard TDS rates (percent) - will be overwritten by Excel VLOOKUP, but keep for internal use
+        # Standard TDS rates (percent)
+        # Note: This is a simplified mapping; the actual Excel uses a lookup table.
         tds_rates = {'194C': 1.0, '194J': 10.0, '194I': 10.0, '194H': 5.0, '194Q': 0.1}
         df['Std TDS Rate %'] = df['TDS Section'].map(lambda x: tds_rates.get(str(x).strip().upper(), 1.0))
 
@@ -423,15 +424,15 @@ class ExcelExporter:
             # --- 1. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
             df_raw = df[raw_cols].copy()
-            # Ensure Date is datetime (not string) for proper date handling
-            df_raw['Date'] = pd.to_datetime(df_raw['Date'], errors='coerce')
+            # Ensure Date is string without time
+            df_raw['Date'] = pd.to_datetime(df_raw['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
             # Write dataframe starting at row 1, without headers
             df_raw.to_excel(writer, sheet_name='Complete Data', index=False, startrow=1, header=False)
             ws_raw = writer.sheets['Complete Data']
             # Write headers manually at row 0
             for col_num, col_name in enumerate(raw_cols):
                 ws_raw.write(0, col_num, col_name, header_fmt)
-            ws_raw.set_column(0, 0, 15, date_fmt)   # Date column with date format
+            ws_raw.set_column(0, 0, 15)
             ws_raw.set_column(1, 1, 30)
             ws_raw.set_column(2, 2, 20)
             ws_raw.set_column(3, 9, 15, money_fmt)
@@ -480,26 +481,11 @@ class ExcelExporter:
             summ_ws.set_column('A:A', 30)
             summ_ws.set_column('B:B', 40)
 
-            # --- Prepare Sample Data with extra columns ---
+            # --- Sample Data (with formulas) ---
             sample_df_out = sample_df.copy()
-            # Convert Date to datetime for proper Excel date
             if 'Date' in sample_df_out.columns:
-                sample_df_out['Date'] = pd.to_datetime(sample_df_out['Date'], errors='coerce')
+                sample_df_out['Date'] = pd.to_datetime(sample_df_out['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
             
-            # Insert 'Day' column after Date (position 1)
-            # We'll create a new DataFrame with columns in desired order
-            cols = sample_df_out.columns.tolist()
-            # Find index of Date
-            date_idx = cols.index('Date') if 'Date' in cols else 0
-            # Insert 'Day' at date_idx+1
-            cols.insert(date_idx+1, 'Day')
-            # Reindex to new column order, filling Day with empty strings (will be overwritten by formula)
-            sample_df_out = sample_df_out.reindex(columns=cols)
-            sample_df_out['Day'] = ''  # placeholder
-
-            # Add 'Verification' column at the end
-            sample_df_out['Verification'] = 'Pending'
-
             # Write sample data without formula columns (we'll write formulas later)
             sample_df_out.to_excel(writer, sheet_name='Sample Data', index=False, startrow=1, header=False)
             sample_ws = writer.sheets['Sample Data']
@@ -511,11 +497,10 @@ class ExcelExporter:
             def col_letter(idx):
                 return chr(65 + idx)
 
-            # Map column names to indices (updated after adding Day and Verification)
+            # Map column names to indices
             col_indices = {name: idx for idx, name in enumerate(sample_df_out.columns)}
-            date_col = col_indices.get('Date', 0)
-            day_col = col_indices.get('Day', 1)  # should be 1 if Date is 0
-            taxable_col = col_indices.get('taxable value', 4)  # may shift
+            # Expected columns (adjust if names differ)
+            taxable_col = col_indices.get('taxable value', 4)
             tds_deducted_col = col_indices.get('TDS deducted', 8)
             tds_section_col = col_indices.get('TDS Section', 9)
             cgst_col = col_indices.get('Input CGST', 5)
@@ -527,24 +512,20 @@ class ExcelExporter:
             required_tds_col = col_indices.get('Required TDS', None)
             tds_shortfall_col = col_indices.get('TDS Shortfall', None)
             tds_compliance_col = col_indices.get('TDS Compliance %', None)
-            verification_col = col_indices.get('Verification', len(sample_df_out.columns)-1)
 
             # Write formulas for each row (starting row 2)
             for row in range(2, len(sample_df_out) + 2):
-                # Day = TEXT(Date, "dddd")
-                day_formula = f'=TEXT({col_letter(date_col)}{row},"dddd")'
-                sample_ws.write_formula(row-1, day_col, day_formula)
-
-                # Total GST = SUM(F2:H2) - note columns may have shifted
+                # Total GST = SUM(F2:H2)
                 if total_gst_col is not None:
                     total_gst_formula = f'=SUM({col_letter(cgst_col)}{row}:{col_letter(igst_col)}{row})'
                     sample_ws.write_formula(row-1, total_gst_col, total_gst_formula)
                 
                 # GST Rate % = Total GST / taxable value
                 if total_gst_col is not None and taxable_col is not None:
+                    gst_rate_formula = f'={col_letter(total_gst_col)}{row}/{col_letter(taxable_col)}{row}'
+                    # We need to find the column index for GST Rate %; assume it exists
                     gst_rate_idx = col_indices.get('GST Rate %', None)
                     if gst_rate_idx is not None:
-                        gst_rate_formula = f'={col_letter(total_gst_col)}{row}/{col_letter(taxable_col)}{row}'
                         sample_ws.write_formula(row-1, gst_rate_idx, gst_rate_formula)
                 
                 # Std TDS Rate % = VLOOKUP(D2, 'TDS Rates'!A:B, 2, FALSE) with default 0.01 if not found
@@ -562,7 +543,8 @@ class ExcelExporter:
                     required_formula = f'={col_letter(taxable_col)}{row}*{col_letter(std_tds_rate_col)}{row}'
                     sample_ws.write_formula(row-1, required_tds_col, required_formula)
                 
-                # TDS Shortfall = TDS deducted - Required TDS (as per I2-O2 earlier)
+                # TDS Shortfall = Required TDS - TDS deducted (as per earlier request: I2-O2 -> deducted - required? but we'll keep as required - deducted for consistency)
+                # User had requested I2-O2 earlier (deducted - required). We'll keep that as per last request: =I2-O2.
                 if tds_shortfall_col is not None and required_tds_col is not None:
                     shortfall_formula = f'={col_letter(tds_deducted_col)}{row}-{col_letter(required_tds_col)}{row}'
                     sample_ws.write_formula(row-1, tds_shortfall_col, shortfall_formula)
@@ -571,9 +553,6 @@ class ExcelExporter:
                 if tds_compliance_col is not None and required_tds_col is not None:
                     compliance_formula = f'=IF({col_letter(required_tds_col)}{row}=0,1,{col_letter(tds_deducted_col)}{row}/{col_letter(required_tds_col)}{row})'
                     sample_ws.write_formula(row-1, tds_compliance_col, compliance_formula)
-                
-                # Verification column remains "Pending" (static)
-                sample_ws.write(row-1, verification_col, 'Pending')
 
             # Apply formatting to Sample Data columns
             for col_num, col_name in enumerate(sample_df_out.columns):
@@ -582,15 +561,11 @@ class ExcelExporter:
                 elif col_name in ['GST Rate %','Std TDS Rate %','Applied TDS Rate %','TDS Compliance %']:
                     sample_ws.set_column(col_num, col_num, 12, percent_fmt)
                 elif col_name == 'Date':
-                    sample_ws.set_column(col_num, col_num, 15, date_fmt)
-                elif col_name == 'Day':
-                    sample_ws.set_column(col_num, col_num, 12)
+                    sample_ws.set_column(col_num, col_num, 15)
                 elif col_name == 'Party name':
                     sample_ws.set_column(col_num, col_num, 30)
                 elif col_name == 'Invoice no':
                     sample_ws.set_column(col_num, col_num, 20)
-                elif col_name == 'Verification':
-                    sample_ws.set_column(col_num, col_num, 15)
                 else:
                     sample_ws.set_column(col_num, col_num, 15)
 
@@ -651,16 +626,14 @@ class ExcelExporter:
             # Format columns
             party_ws.set_column(1, 1, 15, money_fmt)   # Taxable Value
             party_ws.set_column(2, 2, 15, money_fmt)   # TDS Deducted
-            party_ws.set_column(4, 4, 12, percent_fmt) # Rate (decimal) as percentage
+            party_ws.set_column(4, 4, 12, percent_fmt) # Rate (decimal) as percentage? Actually it's decimal, but we format as percentage for clarity.
             party_ws.set_column(5, 5, 15, money_fmt)   # If Yes amount
             party_ws.set_column(6, 6, 15, money_fmt)   # Shortfall/Excess
             party_ws.set_column(0, 0, 30)              # Party Name
             party_ws.set_column(3, 3, 15)              # TDS Applicability
             party_ws.set_column(7, 7, 20)              # Remarks
 
-            # --- Additional Charts for Executive Summary ---
-
-            # 1. Sample Composition Pie (already present, we'll keep it)
+            # --- Add chart to Executive Summary (Sample Composition Pie) ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
             sample_mat_summary.columns = ['Level','Count']
             # Write summary to Sample Data sheet at columns Z, AA
@@ -668,68 +641,16 @@ class ExcelExporter:
             for i, row in sample_mat_summary.iterrows():
                 sample_ws.write(i+1, 25, row['Level'])
                 sample_ws.write(i+1, 26, row['Count'])
-            chart1 = workbook.add_chart({'type':'pie'})
-            chart1.add_series({
+            chart = workbook.add_chart({'type':'pie'})
+            chart.add_series({
                 'name':'Sample Composition',
                 'categories':'=Sample Data!$Z$2:$Z${}'.format(len(sample_mat_summary)+1),
                 'values':'=Sample Data!$AA$2:$AA${}'.format(len(sample_mat_summary)+1),
                 'data_labels':{'percentage':True}
             })
-            chart1.set_title({'name':'Sample Composition by Materiality'})
-            chart1.set_style(10)
-            summ_ws.insert_chart('D2', chart1)
-
-            # 2. Top 5 Parties by TDS Shortfall (using data from Party Analysis)
-            # Get top 5 parties by shortfall (positive shortfall) from df
-            top_shortfall = df.groupby('Party name')['TDS Shortfall'].sum().nlargest(5).reset_index()
-            if len(top_shortfall) > 0:
-                # Write to Executive Summary at rows 16-21, columns D-E
-                start_row = 16
-                summ_ws.write(start_row-1, 3, 'Top 5 Parties by TDS Shortfall', header_fmt)  # D16
-                summ_ws.write(start_row, 3, 'Party Name', header_fmt)   # D17
-                summ_ws.write(start_row, 4, 'Shortfall', header_fmt)    # E17
-                for i, row in enumerate(top_shortfall.itertuples(), start=start_row+1):
-                    summ_ws.write(i, 3, row[1])  # Party name
-                    summ_ws.write(i, 4, row[2], money_fmt)  # Shortfall
-                # Create column chart
-                chart2 = workbook.add_chart({'type':'column'})
-                chart2.add_series({
-                    'name':'TDS Shortfall',
-                    'categories':f'=Executive Summary!$D${start_row+2}:$D${start_row+1+len(top_shortfall)}',
-                    'values':f'=Executive Summary!$E${start_row+2}:$E${start_row+1+len(top_shortfall)}',
-                    'data_labels':{'value':True}
-                })
-                chart2.set_title({'name':'Top 5 TDS Shortfall'})
-                chart2.set_x_axis({'name':'Party'})
-                chart2.set_y_axis({'name':'Amount (₹)'})
-                chart2.set_style(11)
-                summ_ws.insert_chart('D{}'.format(start_row+7), chart2)  # place below the table
-
-            # 3. TDS Compliance by Section
-            comp_sec = df.groupby('TDS Section').agg({'TDS deducted':'sum','Required TDS':'sum'}).reset_index()
-            comp_sec['Compliance %'] = comp_sec['TDS deducted'] / comp_sec['Required TDS'] * 100
-            # Write to Executive Summary at rows 16-?, columns H-I (if space)
-            start_row2 = 16
-            col_h = 7  # H
-            summ_ws.write(start_row2-1, col_h, 'TDS Compliance by Section', header_fmt)
-            summ_ws.write(start_row2, col_h, 'Section', header_fmt)
-            summ_ws.write(start_row2, col_h+1, 'Compliance %', header_fmt)
-            for i, row in enumerate(comp_sec.itertuples(), start=start_row2+1):
-                summ_ws.write(i, col_h, row[1])  # Section
-                summ_ws.write(i, col_h+1, row[3]/100, percent_fmt)  # Compliance % as decimal
-            # Create column chart
-            chart3 = workbook.add_chart({'type':'column'})
-            chart3.add_series({
-                'name':'Compliance %',
-                'categories':f'=Executive Summary!${chr(65+col_h)}${start_row2+2}:${chr(65+col_h)}${start_row2+1+len(comp_sec)}',
-                'values':f'=Executive Summary!${chr(65+col_h+1)}${start_row2+2}:${chr(65+col_h+1)}${start_row2+1+len(comp_sec)}',
-                'data_labels':{'value':True,'num_format':'0.00%'}
-            })
-            chart3.set_title({'name':'Compliance % by Section'})
-            chart3.set_x_axis({'name':'Section'})
-            chart3.set_y_axis({'name':'Compliance %','num_format':'0%'})
-            chart3.set_style(12)
-            summ_ws.insert_chart('H{}'.format(start_row2+7), chart3)
+            chart.set_title({'name':'Sample Composition by Materiality'})
+            chart.set_style(10)
+            summ_ws.insert_chart('D2', chart)
 
         return output.getvalue()
 
@@ -860,8 +781,7 @@ def main():
                 ('💰 TOTAL VALUE', f'₹{total_value:,.0f}'),
                 ('📦 TRANSACTIONS', f'{len(df)}'),
                 ('🔥 CRITICAL', f'{len(df[df["Materiality Level"]=="🔥 CRITICAL"])}'),
-                ('🎯 SAMPLE SIZE', f'{len(combined_sample)} ({sample_percentage}%)'),
-                ('⚠️ SHORTFALL', f'₹{df["TDS Shortfall"].sum():,.0f}')
+                ('🎯 SAMPLE SIZE', f'{len(combined_sample)} ({sample_percentage}%)')
             ]
             for col, (label, val) in zip(cols, metrics):
                 col.markdown(f'<div class="metric-card-ultra"><h4 style="color:#00ff87;">{label}</h4><h2 style="color:white;">{val}</h2></div>', unsafe_allow_html=True)
@@ -958,10 +878,11 @@ def main():
                 <div class="glass-card">
                     <h4>Export will include:</h4>
                     <ul>
-                        <li>📊 Executive Summary with Sample Composition Chart + Top Shortfall & Compliance Charts</li>
+                        <li>📊 Executive Summary with Sample Composition Chart</li>
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
-                        <li>🔍 Sample Data with Day column (formula =TEXT(Date,"dddd")), Verification column, and all TDS formulas using VLOOKUP from TDS Rates sheet</li>
+                        <li>🔍 Sample Data with formulas for Total GST, GST Rate %, Std TDS Rate % (using VLOOKUP from TDS Rates sheet), Applied TDS Rate %, Required TDS, TDS Shortfall, TDS Compliance %</li>
                         <li>🏢 Party Analysis with SUMIF for Taxable Value and TDS Deducted, and formula for If Yes column (=B2*E2)</li>
+                        <li>📊 Sample Composition Pie Chart</li>
                     </ul>
                 </div>
                 """, unsafe_allow_html=True)
