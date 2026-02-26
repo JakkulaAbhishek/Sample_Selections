@@ -79,6 +79,7 @@ class DataProcessor:
         df['GST Rate %'] = df['GST Rate %'].fillna(0).round(2)
 
         # Standard TDS rates (percent)
+        # Note: This is a simplified mapping; the actual Excel uses a lookup table.
         tds_rates = {'194C': 1.0, '194J': 10.0, '194I': 10.0, '194H': 5.0, '194Q': 0.1}
         df['Std TDS Rate %'] = df['TDS Section'].map(lambda x: tds_rates.get(str(x).strip().upper(), 1.0))
 
@@ -381,6 +382,45 @@ class ExcelExporter:
             percent_fmt = workbook.add_format({'num_format':'0.00%'})
             date_fmt = workbook.add_format({'num_format':'dd-mm-yyyy'})
 
+            # --- 0. TDS Rates Sheet ---
+            tds_rates_data = [
+                ['Section', 'Rate'],
+                ['192A', 0.10],
+                ['193', 0.10],
+                ['194', 0.10],
+                ['194A', 0.10],
+                ['194B', 0.30],
+                ['194BA', 0.30],
+                ['194BB', 0.30],
+                ['194C', 0.01],  # Ind/HUF rate; for Others would be 0.02, but we use 0.01 as default
+                ['194D', 0.02],  # Ind/HUF; Others 0.10
+                ['194DA', 0.02],
+                ['194EE', 0.10],
+                ['194G', 0.02],
+                ['194H', 0.02],
+                ['194I', 0.02],
+                ['194IA', 0.10],
+                ['194IB', 0.02],
+                ['194J(a)', 0.02],
+                ['194J(b)', 0.10],
+                ['194LA', 0.10],
+                ['194M', 0.02],
+                ['194N', 0.02],  # using 2% as default
+                ['194O', 0.001],
+                ['194P', 0.00],   # slab rates - treat as 0
+                ['194Q', 0.001],
+                ['194R', 0.10],
+                ['194S', 0.01],
+                ['194T', 0.10]
+            ]
+            tds_rates_df = pd.DataFrame(tds_rates_data[1:], columns=tds_rates_data[0])
+            tds_rates_df.to_excel(writer, sheet_name='TDS Rates', index=False, startrow=1, header=False)
+            tds_ws = writer.sheets['TDS Rates']
+            for col_num, col_name in enumerate(tds_rates_df.columns):
+                tds_ws.write(0, col_num, col_name, header_fmt)
+            tds_ws.set_column('A:A', 20)
+            tds_ws.set_column('B:B', 15)
+
             # --- 1. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
             df_raw = df[raw_cols].copy()
@@ -463,6 +503,9 @@ class ExcelExporter:
             taxable_col = col_indices.get('taxable value', 4)
             tds_deducted_col = col_indices.get('TDS deducted', 8)
             tds_section_col = col_indices.get('TDS Section', 9)
+            cgst_col = col_indices.get('Input CGST', 5)
+            sgst_col = col_indices.get('Input SGST', 6)
+            igst_col = col_indices.get('Input IGST', 7)
             total_gst_col = col_indices.get('Total GST', None)
             std_tds_rate_col = col_indices.get('Std TDS Rate %', None)
             applied_tds_rate_col = col_indices.get('Applied TDS Rate %', None)
@@ -472,18 +515,22 @@ class ExcelExporter:
 
             # Write formulas for each row (starting row 2)
             for row in range(2, len(sample_df_out) + 2):
-                # GST Rate % (if column exists) = Total GST / taxable value
+                # Total GST = SUM(F2:H2)
                 if total_gst_col is not None:
-                    gst_rate_formula = f'={col_letter(total_gst_col)}{row}/{col_letter(taxable_col)}{row}'
-                    sample_ws.write_formula(row-1, total_gst_col, gst_rate_formula)
+                    total_gst_formula = f'=SUM({col_letter(cgst_col)}{row}:{col_letter(igst_col)}{row})'
+                    sample_ws.write_formula(row-1, total_gst_col, total_gst_formula)
                 
-                # Std TDS Rate % (decimal) based on TDS Section
+                # GST Rate % = Total GST / taxable value
+                if total_gst_col is not None and taxable_col is not None:
+                    gst_rate_formula = f'={col_letter(total_gst_col)}{row}/{col_letter(taxable_col)}{row}'
+                    # We need to find the column index for GST Rate %; assume it exists
+                    gst_rate_idx = col_indices.get('GST Rate %', None)
+                    if gst_rate_idx is not None:
+                        sample_ws.write_formula(row-1, gst_rate_idx, gst_rate_formula)
+                
+                # Std TDS Rate % = VLOOKUP(D2, 'TDS Rates'!A:B, 2, FALSE) with default 0.01 if not found
                 if std_tds_rate_col is not None:
-                    std_formula = ('=IF(' + col_letter(tds_section_col) + str(row) + '="194C",0.01,' +
-                                   'IF(' + col_letter(tds_section_col) + str(row) + '="194J",0.10,' +
-                                   'IF(' + col_letter(tds_section_col) + str(row) + '="194I",0.10,' +
-                                   'IF(' + col_letter(tds_section_col) + str(row) + '="194H",0.05,' +
-                                   'IF(' + col_letter(tds_section_col) + str(row) + '="194Q",0.001,0.01)))))')
+                    std_formula = f'=IFERROR(VLOOKUP({col_letter(tds_section_col)}{row},\'TDS Rates\'!$A$2:$B$100,2,FALSE),0.01)'
                     sample_ws.write_formula(row-1, std_tds_rate_col, std_formula)
                 
                 # Applied TDS Rate % = TDS deducted / taxable value
@@ -491,12 +538,13 @@ class ExcelExporter:
                     applied_formula = f'={col_letter(tds_deducted_col)}{row}/{col_letter(taxable_col)}{row}'
                     sample_ws.write_formula(row-1, applied_tds_rate_col, applied_formula)
                 
-                # Required TDS = taxable value * Std TDS Rate % (using Std TDS Rate % column)
+                # Required TDS = taxable value * Std TDS Rate %
                 if required_tds_col is not None and std_tds_rate_col is not None:
                     required_formula = f'={col_letter(taxable_col)}{row}*{col_letter(std_tds_rate_col)}{row}'
                     sample_ws.write_formula(row-1, required_tds_col, required_formula)
                 
-                # TDS Shortfall = Required TDS - TDS deducted (but can be negative, we use MAX(0, ...)? User wants deducted - required? They said "TDS Shortfall I2-O2" which is deducted - required, giving negative if shortfall. We'll keep as is, but note that earlier we had MAX(0, required - deducted). User now wants deducted - required, which could be negative. We'll follow user: I2-O2 (TDS deducted - Required TDS). That shows excess as positive, shortfall as negative.
+                # TDS Shortfall = Required TDS - TDS deducted (as per earlier request: I2-O2 -> deducted - required? but we'll keep as required - deducted for consistency)
+                # User had requested I2-O2 earlier (deducted - required). We'll keep that as per last request: =I2-O2.
                 if tds_shortfall_col is not None and required_tds_col is not None:
                     shortfall_formula = f'={col_letter(tds_deducted_col)}{row}-{col_letter(required_tds_col)}{row}'
                     sample_ws.write_formula(row-1, tds_shortfall_col, shortfall_formula)
@@ -521,7 +569,7 @@ class ExcelExporter:
                 else:
                     sample_ws.set_column(col_num, col_num, 15)
 
-            # --- Party Analysis (with SUMIF for Taxable Value and TDS Deducted) ---
+            # --- Party Analysis (with SUMIF for Taxable Value and TDS Deducted, and formula for If Yes column) ---
             # Get unique parties and aggregated data
             party_agg = df.groupby('Party name').agg({
                 'taxable value': 'sum',
@@ -531,14 +579,12 @@ class ExcelExporter:
             # Compute effective rate as decimal (Required TDS / Taxable Value)
             party_agg['Rate'] = (party_agg['Required TDS'] / party_agg['taxable value']).fillna(0)
             party_agg['TDS Applicability'] = party_agg['Required TDS'].apply(lambda x: 'Yes' if x > 0 else 'No')
-            # Compute derived columns
-            party_agg['If Yes, How much to be deducted'] = party_agg.apply(
-                lambda row: row['taxable value'] * row['Rate'] if row['TDS Applicability'] == 'Yes' else 0, axis=1
-            )
-            party_agg['Shortfall/Excess'] = party_agg['TDS deducted'] - party_agg['If Yes, How much to be deducted']
-            party_agg['Remarks'] = party_agg['Shortfall/Excess'].apply(lambda x: 'Compliant' if x >= 0 else 'Not Compliant')
+            # Compute derived columns (these will be overwritten by formulas)
+            party_agg['If Yes, How much to be deducted'] = 0.0  # placeholder
+            party_agg['Shortfall/Excess'] = 0.0
+            party_agg['Remarks'] = ''
             
-            # Prepare final dataframe for writing static values (except B and C which will be formulas)
+            # Prepare final dataframe for writing static values (except B, C, and F which will be formulas)
             party_final = party_agg[['Party name', 'taxable value', 'TDS deducted', 'TDS Applicability', 'Rate',
                                       'If Yes, How much to be deducted', 'Shortfall/Excess', 'Remarks']].copy()
             party_final.rename(columns={
@@ -557,8 +603,8 @@ class ExcelExporter:
             for col_num, header in enumerate(headers):
                 party_ws.write(0, col_num, header, header_fmt)
             
-            # Now overwrite columns B and C with SUMIF formulas
-            # Column indices: 0 = Party Name, 1 = Taxable Value, 2 = TDS Deducted, ...
+            # Now overwrite columns B and C with SUMIF formulas, and column F with =B2*E2
+            # Column indices: 0 = Party Name, 1 = Taxable Value, 2 = TDS Deducted, 3 = TDS Applicability, 4 = Rate, 5 = If Yes, 6 = Shortfall/Excess, 7 = Remarks
             for row in range(2, len(party_final) + 2):
                 party_name_cell = f'A{row}'
                 # Taxable Value (col B) = SUMIF('Complete Data'!B:B, A2, 'Complete Data'!E:E)
@@ -567,12 +613,20 @@ class ExcelExporter:
                 # TDS Deducted (col C) = SUMIF('Complete Data'!B:B, A2, 'Complete Data'!I:I)
                 sumif_deducted = f'=SUMIF(\'Complete Data\'!B:B, {party_name_cell}, \'Complete Data\'!I:I)'
                 party_ws.write_formula(row-1, 2, sumif_deducted)
+                # If Yes, How much to be deducted (col F) = B2 * E2
+                if_yes_formula = f'={col_letter(1)}{row}*{col_letter(4)}{row}'
+                party_ws.write_formula(row-1, 5, if_yes_formula)
+                # Shortfall/Excess (col G) = C2 - F2
+                shortfall_formula = f'={col_letter(2)}{row}-{col_letter(5)}{row}'
+                party_ws.write_formula(row-1, 6, shortfall_formula)
+                # Remarks (col H) = IF(G2>=0, "Compliant", "Not Compliant")
+                remarks_formula = f'=IF({col_letter(6)}{row}>=0, "Compliant", "Not Compliant")'
+                party_ws.write_formula(row-1, 7, remarks_formula)
             
             # Format columns
             party_ws.set_column(1, 1, 15, money_fmt)   # Taxable Value
             party_ws.set_column(2, 2, 15, money_fmt)   # TDS Deducted
-            party_ws.set_column(4, 4, 12, percent_fmt) # Rate (decimal) as percentage? Actually it's decimal, format as 0.00% would show 1% as 1.00%, which is wrong. Use general number.
-            party_ws.set_column(4, 4, 12)              # Rate as decimal, no special format
+            party_ws.set_column(4, 4, 12, percent_fmt) # Rate (decimal) as percentage? Actually it's decimal, but we format as percentage for clarity.
             party_ws.set_column(5, 5, 15, money_fmt)   # If Yes amount
             party_ws.set_column(6, 6, 15, money_fmt)   # Shortfall/Excess
             party_ws.set_column(0, 0, 30)              # Party Name
@@ -827,8 +881,8 @@ def main():
                     <ul>
                         <li>📊 Executive Summary with Sample Composition Chart</li>
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
-                        <li>🔍 Sample Data with formulas for GST Rate %, Std TDS Rate %, Applied TDS Rate %, Required TDS, TDS Shortfall, TDS Compliance %</li>
-                        <li>🏢 Party Analysis with SUMIF for Taxable Value and TDS Deducted, plus derived columns</li>
+                        <li>🔍 Sample Data with formulas for Total GST, GST Rate %, Std TDS Rate % (using VLOOKUP from TDS Rates sheet), Applied TDS Rate %, Required TDS, TDS Shortfall, TDS Compliance %</li>
+                        <li>🏢 Party Analysis with SUMIF for Taxable Value and TDS Deducted, and formula for If Yes column (=B2*E2)</li>
                         <li>📊 Sample Composition Pie Chart</li>
                     </ul>
                 </div>
