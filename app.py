@@ -781,8 +781,7 @@ def main():
                 ('💰 TOTAL VALUE', f'₹{total_value:,.0f}'),
                 ('📦 TRANSACTIONS', f'{len(df)}'),
                 ('🔥 CRITICAL', f'{len(df[df["Materiality Level"]=="🔥 CRITICAL"])}'),
-                ('🎯 SAMPLE SIZE', f'{len(combined_sample)} ({sample_percentage}%)'),
-                ('⚠️ SHORTFALL', f'₹{df["TDS Shortfall"].sum():,.0f}')
+                ('🎯 SAMPLE SIZE', f'{len(combined_sample)} ({sample_percentage}%)')
             ]
             for col, (label, val) in zip(cols, metrics):
                 col.markdown(f'<div class="metric-card-ultra"><h4 style="color:#00ff87;">{label}</h4><h2 style="color:white;">{val}</h2></div>', unsafe_allow_html=True)
