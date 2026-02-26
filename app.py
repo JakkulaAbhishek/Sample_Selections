@@ -411,104 +411,57 @@ class ExcelExporter:
             # Write headers manually at row 0
             for col_num, col_name in enumerate(raw_cols):
                 ws_raw.write(0, col_num, col_name, header_fmt)
-            # Apply date format to Date column (col 0) - but since we wrote strings, formatting may not change; we set column width
-            ws_raw.set_column(0, 0, 15)  # width
-            ws_raw.set_column(1, 1, 30)  # Party name
-            ws_raw.set_column(2, 2, 20)  # Invoice no
-            ws_raw.set_column(3, 9, 15, money_fmt)  # monetary columns
+            ws_raw.set_column(0, 0, 15)
+            ws_raw.set_column(1, 1, 30)
+            ws_raw.set_column(2, 2, 20)
+            ws_raw.set_column(3, 9, 15, money_fmt)
 
-            # --- 2. Analysis Sheet (with derived formulas, including separate CGST, SGST, IGST) ---
-            ws_analysis = workbook.add_worksheet('Analysis')
-            analysis_headers = [
-                'Party name', 'Invoice no', 'Taxable Value', 'TDS Section', 'TDS Deducted',
-                'Input CGST', 'Input SGST', 'Input IGST', 'Total GST',
-                'GST Rate %', 'Std TDS Rate %', 'Applied TDS Rate %',
-                'Required TDS', 'TDS Shortfall', 'Interest Payable', 'Net Payable',
-                'TDS Compliance %', 'Materiality Score', 'Materiality Level',
-                'Audit Priority', 'Compliance Status'
-            ]
-            for col_num, header in enumerate(analysis_headers):
-                ws_analysis.write(0, col_num, header, header_fmt)
+            # --- 2. Analysis Sheet (static data with all derived columns, like sample data format) ---
+            # Create a copy of full df with all columns for analysis
+            analysis_df = df.copy()
+            # Ensure Date is formatted
+            if 'Date' in analysis_df.columns:
+                analysis_df['Date'] = pd.to_datetime(analysis_df['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
+            # Write to sheet
+            analysis_df.to_excel(writer, sheet_name='Analysis', index=False, startrow=1, header=False)
+            ws_analysis = writer.sheets['Analysis']
+            # Write headers
+            for col_num, col_name in enumerate(analysis_df.columns):
+                ws_analysis.write(0, col_num, col_name, header_fmt)
+            # Set column formats (rough guess based on column names)
+            for col_num, col_name in enumerate(analysis_df.columns):
+                if col_name in ['Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','Total GST','Required TDS','TDS Shortfall','Interest Payable','Net Payable']:
+                    ws_analysis.set_column(col_num, col_num, 15, money_fmt)
+                elif col_name in ['GST Rate %','Std TDS Rate %','Applied TDS Rate %','TDS Compliance %']:
+                    ws_analysis.set_column(col_num, col_num, 12, percent_fmt)
+                elif col_name == 'Date':
+                    ws_analysis.set_column(col_num, col_num, 15)
+                elif col_name == 'Party name':
+                    ws_analysis.set_column(col_num, col_num, 30)
+                elif col_name == 'Invoice no':
+                    ws_analysis.set_column(col_num, col_num, 20)
+                else:
+                    ws_analysis.set_column(col_num, col_num, 15)
 
-            # Place total taxable value in cell Z1 (for materiality score denominator)
-            ws_analysis.write_formula('Z1', '=SUM(\'Complete Data\'!E:E)', money_fmt)
-            # Place materiality threshold (as decimal) in cell B1
-            ws_analysis.write(0, 1, materiality_threshold/100, percent_fmt)  # B1
-
-            # Write formulas for each row (from row 2 onward)
-            last_row = len(df_raw) + 1  # because raw data starts at row 2 in Complete Data sheet
-            for row in range(2, last_row + 1):
-                # Party name (A) = Complete Data B{row}
-                ws_analysis.write_formula(row-1, 0, f'=\'Complete Data\'!B{row}')
-                # Invoice no (B)
-                ws_analysis.write_formula(row-1, 1, f'=\'Complete Data\'!C{row}')
-                # Taxable Value (C)
-                ws_analysis.write_formula(row-1, 2, f'=\'Complete Data\'!E{row}')
-                # TDS Section (D)
-                ws_analysis.write_formula(row-1, 3, f'=\'Complete Data\'!J{row}')
-                # TDS Deducted (E)
-                ws_analysis.write_formula(row-1, 4, f'=\'Complete Data\'!I{row}')
-                # Input CGST (F)
-                ws_analysis.write_formula(row-1, 5, f'=\'Complete Data\'!F{row}')
-                # Input SGST (G)
-                ws_analysis.write_formula(row-1, 6, f'=\'Complete Data\'!G{row}')
-                # Input IGST (H)
-                ws_analysis.write_formula(row-1, 7, f'=\'Complete Data\'!H{row}')
-                # Total GST (I) = F+G+H
-                ws_analysis.write_formula(row-1, 8, f'=F{row}+G{row}+H{row}')
-                # GST Rate % (J) = IF(C{row}=0,0,I{row}/C{row}*100)
-                ws_analysis.write_formula(row-1, 9, f'=IF(C{row}=0,0,I{row}/C{row}*100)')
-                # Std TDS Rate % (K) using nested IF based on D{row}
-                ws_analysis.write_formula(row-1, 10,
-                    '=IF(D{row}="194C",1,IF(D{row}="194J",10,IF(D{row}="194I",10,IF(D{row}="194H",5,IF(D{row}="194Q",0.1,1)))))'.format(row=row))
-                # Applied TDS Rate % (L) = IF(C{row}=0,0,E{row}/C{row}*100)
-                ws_analysis.write_formula(row-1, 11, f'=IF(C{row}=0,0,E{row}/C{row}*100)')
-                # Required TDS (M) = C{row} * K{row} / 100
-                ws_analysis.write_formula(row-1, 12, f'=C{row}*K{row}/100')
-                # TDS Shortfall (N) = MAX(0, M{row} - E{row})
-                ws_analysis.write_formula(row-1, 13, f'=MAX(0,M{row}-E{row})')
-                # Interest Payable (O) = N{row} * 0.015 * 3
-                ws_analysis.write_formula(row-1, 14, f'=N{row}*0.015*3')
-                # Net Payable (P) = C{row} + I{row} - E{row}
-                ws_analysis.write_formula(row-1, 15, f'=C{row}+I{row}-E{row}')
-                # TDS Compliance % (Q) = IF(M{row}=0,100,MIN(100,E{row}/M{row}*100))
-                ws_analysis.write_formula(row-1, 16, f'=IF(M{row}=0,100,MIN(100,E{row}/M{row}*100))')
-                # Materiality Score (R) = C{row} / $Z$1 / $B$1
-                ws_analysis.write_formula(row-1, 17, f'=C{row}/$Z$1/$B$1')
-                # Materiality Level (S) based on R{row}
-                ws_analysis.write_formula(row-1, 18,
-                    '=IF(R{row}>=0.5,"🔥 CRITICAL",IF(R{row}>=0.2,"⚡ HIGH",IF(R{row}>=0.1,"💫 MEDIUM",IF(R{row}>=0.05,"🌟 LOW","📦 IMMATERIAL"))))'.format(row=row))
-                # Audit Priority (T) based on S{row}
-                ws_analysis.write_formula(row-1, 19,
-                    '=IF(S{row}="🔥 CRITICAL",1,IF(S{row}="⚡ HIGH",2,IF(S{row}="💫 MEDIUM",3,IF(S{row}="🌟 LOW",4,5))))'.format(row=row))
-                # Compliance Status (U) based on N{row} and E{row}
-                ws_analysis.write_formula(row-1, 20,
-                    '=IF(N{row}=0,"✅ FULLY COMPLIANT",IF(E{row}>0,"⚠️ PARTIAL SHORTFALL","❌ NOT DEDUCTED"))'.format(row=row))
-
-            # Apply formatting to Analysis columns
-            ws_analysis.set_column(0, 1, 30)   # Party, Invoice
-            ws_analysis.set_column(2, 2, 15, money_fmt)  # Taxable Value
-            ws_analysis.set_column(3, 3, 12)   # TDS Section
-            ws_analysis.set_column(4, 4, 15, money_fmt)  # TDS Deducted
-            ws_analysis.set_column(5, 7, 15, money_fmt)  # CGST, SGST, IGST
-            ws_analysis.set_column(8, 8, 15, money_fmt)  # Total GST
-            ws_analysis.set_column(9, 9, 12, percent_fmt)  # GST Rate %
-            ws_analysis.set_column(10, 10, 12, percent_fmt)  # Std TDS Rate %
-            ws_analysis.set_column(11, 11, 15, percent_fmt)  # Applied TDS Rate %
-            ws_analysis.set_column(12, 12, 15, money_fmt)  # Required TDS
-            ws_analysis.set_column(13, 13, 15, money_fmt)  # TDS Shortfall
-            ws_analysis.set_column(14, 14, 15, money_fmt)  # Interest Payable
-            ws_analysis.set_column(15, 15, 15, money_fmt)  # Net Payable
-            ws_analysis.set_column(16, 16, 15, percent_fmt)  # TDS Compliance %
-            ws_analysis.set_column(17, 17, 15)  # Materiality Score
-            ws_analysis.set_column(18, 18, 20)  # Materiality Level
-            ws_analysis.set_column(19, 19, 12)  # Audit Priority
-            ws_analysis.set_column(20, 20, 25)  # Compliance Status
-
-            # --- Executive Summary (no gradient) ---
+            # --- Executive Summary (rows 1-14 only) ---
             total_val = df['taxable value'].sum()
             summary_data = {
-                'Metric': ['Audit Date','Total Transactions','Total Value','Materiality Threshold','Materiality Amount','Sample Size','Sample Percentage','Sample Value','Sample Coverage %','Critical Items','High Items','Medium Items','Low Items','Total TDS Deducted','Total TDS Required','Total TDS Shortfall','Total Interest Payable','Overall Compliance %','Sampling Methods Used'],
+                'Metric': [
+                    'Audit Date',
+                    'Total Transactions',
+                    'Total Value',
+                    'Materiality Threshold',
+                    'Materiality Amount',
+                    'Sample Size',
+                    'Sample Percentage',
+                    'Sample Value',
+                    'Sample Coverage %',
+                    'Critical Items',
+                    'High Items',
+                    'Medium Items',
+                    'Low Items',
+                    'Sampling Methods Used'  # last kept; removed financial aggregates
+                ],
                 'Value': [
                     datetime.now().strftime('%d-%m-%Y %H:%M'),
                     len(df),
@@ -523,11 +476,6 @@ class ExcelExporter:
                     len(df[df['Materiality Level']=='⚡ HIGH']),
                     len(df[df['Materiality Level']=='💫 MEDIUM']),
                     len(df[df['Materiality Level']=='🌟 LOW']),
-                    f'₹{df["TDS deducted"].sum():,.0f}',
-                    f'₹{df["Required TDS"].sum():,.0f}',
-                    f'₹{df["TDS Shortfall"].sum():,.0f}',
-                    f'₹{df["Interest Payable"].sum():,.0f}',
-                    f'{df["TDS deducted"].sum()/df["Required TDS"].sum()*100:.1f}%' if df["Required TDS"].sum()>0 else '100%',
                     ', '.join(selected_methods)
                 ]
             }
@@ -539,100 +487,155 @@ class ExcelExporter:
             summ_ws.set_column('A:A', 30)
             summ_ws.set_column('B:B', 40)
 
-            # --- Sample Data (with formatted date) ---
+            # --- Sample Data (with formulas for three columns) ---
             sample_df_out = sample_df.copy()
             if 'Date' in sample_df_out.columns:
                 sample_df_out['Date'] = pd.to_datetime(sample_df_out['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
+            
+            # Write sample data without those three columns' values (we'll write formulas later)
+            # First, write all columns except we'll overwrite the three with formulas
             sample_df_out.to_excel(writer, sheet_name='Sample Data', index=False, startrow=1, header=False)
             sample_ws = writer.sheets['Sample Data']
+            # Write headers
             for col_num, col_name in enumerate(sample_df_out.columns):
                 sample_ws.write(0, col_num, col_name, header_fmt)
-            # Apply date format to Date column if present
-            if 'Date' in sample_df_out.columns:
-                date_col_idx = sample_df_out.columns.get_loc('Date')
-                sample_ws.set_column(date_col_idx, date_col_idx, 15)  # width only; formatting may not apply to strings
-            # Format monetary columns
-            for idx, col in enumerate(sample_df_out.columns):
-                if col in ['Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','Total GST','Required TDS','TDS Shortfall','Interest Payable','Net Payable']:
-                    sample_ws.set_column(idx, idx, 15, money_fmt)
 
-            # --- Party Analysis (simplified as per user request) ---
-            party_simple = df.groupby('Party name').agg({
+            # Determine column indices for formulas (0-based)
+            # Assuming order from sample_df_out: we need to know positions of 'taxable value', 'TDS deducted', 'Std TDS Rate %', 'Required TDS', 'Applied TDS Rate %', 'TDS Shortfall'
+            # Let's get mapping
+            col_indices = {name: idx for idx, name in enumerate(sample_df_out.columns)}
+            e_col = col_indices.get('taxable value', 4)  # default guess
+            i_col = col_indices.get('TDS deducted', 8)
+            m_col = col_indices.get('Std TDS Rate %', 12)
+            o_col = col_indices.get('Required TDS', 14)
+            n_col = col_indices.get('Applied TDS Rate %', 13)
+            p_col = col_indices.get('TDS Shortfall', 15)
+
+            # Write formulas for each row (starting row 2)
+            for row in range(2, len(sample_df_out) + 2):
+                # Applied TDS Rate % (col N) = IF(E{row}=0,0,I{row}/E{row}*100)
+                # Use Excel column letters: we need to convert indices to letters: 0->A,1->B,... 
+                # Let's compute letters: for simplicity, we'll use R1C1 notation? xlsxwriter supports A1 notation with column letters.
+                # We'll write using A1 with column letters derived from indices.
+                # Helper to get column letter: openpyxl has utility, but we'll implement simple mapping for up to 26 columns (our case <26)
+                def col_letter(idx):
+                    return chr(65 + idx)  # 0->A, 1->B, ... up to Z
+                e_letter = col_letter(e_col)
+                i_letter = col_letter(i_col)
+                m_letter = col_letter(m_col)
+                o_letter = col_letter(o_col)
+                n_letter = col_letter(n_col)
+                p_letter = col_letter(p_col)
+
+                # Write formula in Applied TDS Rate % column
+                sample_ws.write_formula(row-1, n_col, f'=IF({e_letter}{row}=0,0,{i_letter}{row}/{e_letter}{row}*100)')
+                # Write formula in Required TDS column
+                sample_ws.write_formula(row-1, o_col, f'={e_letter}{row}*{m_letter}{row}/100')
+                # Write formula in TDS Shortfall column (as deducted - required)
+                sample_ws.write_formula(row-1, p_col, f'={i_letter}{row}-{o_letter}{row}')
+
+            # Apply formatting to Sample Data columns
+            for col_num, col_name in enumerate(sample_df_out.columns):
+                if col_name in ['Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','Total GST','Required TDS','Interest Payable','Net Payable']:
+                    sample_ws.set_column(col_num, col_num, 15, money_fmt)
+                elif col_name in ['GST Rate %','Std TDS Rate %','Applied TDS Rate %','TDS Compliance %']:
+                    sample_ws.set_column(col_num, col_num, 12, percent_fmt)
+                elif col_name == 'Date':
+                    sample_ws.set_column(col_num, col_num, 15)
+                elif col_name == 'Party name':
+                    sample_ws.set_column(col_num, col_num, 30)
+                elif col_name == 'Invoice no':
+                    sample_ws.set_column(col_num, col_num, 20)
+                else:
+                    sample_ws.set_column(col_num, col_num, 15)
+
+            # --- Party Analysis (simplified with Rate column) ---
+            # Aggregate per party
+            party_agg = df.groupby('Party name').agg({
                 'taxable value': 'sum',
                 'TDS deducted': 'sum',
                 'Required TDS': 'sum'
             }).reset_index()
-            party_simple['TDS Applicability'] = party_simple['Required TDS'].apply(lambda x: 'Yes' if x > 0 else 'No')
-            party_simple['If Yes, How much to be deducted'] = party_simple['Required TDS']
-            party_simple['Shortfall/Excess'] = party_simple['Required TDS'] - party_simple['TDS deducted']
-            party_simple['Remarks'] = party_simple['Shortfall/Excess'].apply(lambda x: 'Compliant' if x == 0 else 'Not Compliant')
-            # Rename columns for clarity
-            party_simple.rename(columns={
+            # Compute effective rate % = (Required TDS sum / Taxable Value sum) * 100
+            party_agg['Rate (%)'] = (party_agg['Required TDS'] / party_agg['taxable value'] * 100).round(2)
+            party_agg['TDS Applicability'] = party_agg['Required TDS'].apply(lambda x: 'Yes' if x > 0 else 'No')
+            
+            # Reorder columns for output
+            party_final = party_agg[['Party name', 'taxable value', 'TDS deducted', 'TDS Applicability', 'Rate (%)']].copy()
+            party_final.rename(columns={
                 'Party name': 'Party Name',
                 'taxable value': 'Taxable Value',
-                'TDS deducted': 'TDS Deducted as per books',
-                'Required TDS': 'Required TDS'
+                'TDS deducted': 'TDS Deducted as per books'
             }, inplace=True)
-            # Select final columns in desired order
-            party_final = party_simple[['Party Name', 'Taxable Value', 'TDS Deducted as per books', 'TDS Applicability',
-                                         'If Yes, How much to be deducted', 'Shortfall/Excess', 'Remarks']]
+            
+            # Write static values first (without the last three formula columns)
+            # We'll write the dataframe without the formula columns, then add formulas for the remaining columns.
+            # But we need to include columns for "If Yes, How much to be deducted", "Shortfall/Excess", "Remarks".
+            # Let's create a base with all columns (including placeholders for formula columns)
+            party_final['If Yes, How much to be deducted'] = 0.0  # placeholder
+            party_final['Shortfall/Excess'] = 0.0
+            party_final['Remarks'] = ''
+            
+            # Write to sheet starting at row 1
             party_final.to_excel(writer, sheet_name='Party Analysis', index=False, startrow=1, header=False)
             party_ws = writer.sheets['Party Analysis']
             # Write headers
-            for col_num, col_name in enumerate(party_final.columns):
-                party_ws.write(0, col_num, col_name, header_fmt)
-            # Format monetary columns
-            party_ws.set_column(1, 1, 15, money_fmt)  # Taxable Value
-            party_ws.set_column(2, 2, 15, money_fmt)  # TDS Deducted
-            party_ws.set_column(4, 4, 15, money_fmt)  # Required TDS
-            party_ws.set_column(5, 5, 15, money_fmt)  # Shortfall/Excess
-            party_ws.set_column(0, 0, 30)  # Party Name
-            party_ws.set_column(3, 3, 15)  # Applicability
-            party_ws.set_column(6, 6, 20)  # Remarks
-
-            # --- Add charts to Executive Summary ---
-            # Chart 1: Top 5 Parties - TDS Shortfall (positive shortfall) using Party Analysis column F (Shortfall/Excess)
-            # We'll create a chart based on the Shortfall/Excess column, but only positive values will appear in top 5.
-            # The chart will be a column chart.
-            chart1 = workbook.add_chart({'type':'column'})
-            # Need to get the top 5 positive shortfalls. We'll use the data in Party Analysis sheet.
-            # We'll define a dynamic range for the chart, but to keep it simple, we'll write a small summary table in Party Analysis for chart? 
-            # Instead, we can use the existing data and let Excel's chart filter top N? Not directly.
-            # We'll just create a chart that shows all parties with positive shortfall, but that may be many.
-            # To keep it simple and avoid complexity, we'll remove this chart as well. But the user might expect some visual.
-            # Alternative: create a small table in Executive Summary with top 5 shortfalls from the data and chart that.
-            # But that adds complexity. Since user didn't specifically ask to keep charts, we can remove both charts to avoid errors.
-            # However, they might like to see some charts. Let's keep one simple chart: Sample Composition by Materiality (from Sample Data).
-            # We'll remove the Top 5 Parties chart and the others. We'll keep only the Sample Composition pie chart.
+            headers = ['Party Name', 'Taxable Value', 'TDS Deducted as per books', 'TDS Applicability', 'Rate (%)',
+                       'If Yes, How much to be deducted', 'Shortfall/Excess', 'Remarks']
+            for col_num, header in enumerate(headers):
+                party_ws.write(0, col_num, header, header_fmt)
             
-            # But the existing code had a chart for Top 5 Parties TDS Shortfall referencing Party Analysis column G. We removed that column.
-            # So we must either adapt or remove. I'll remove it to avoid errors.
+            # Determine column indices (0-based)
+            party_cols = {name: idx for idx, name in enumerate(headers)}
+            b_col = party_cols['Taxable Value']          # 1
+            c_col = party_cols['TDS Deducted as per books']  # 2
+            d_col = party_cols['TDS Applicability']      # 3
+            e_col = party_cols['Rate (%)']                # 4
+            f_col = party_cols['If Yes, How much to be deducted']  # 5
+            g_col = party_cols['Shortfall/Excess']        # 6
+            h_col = party_cols['Remarks']                  # 7
 
-            # Chart 2: Sample Composition by Materiality (from Sample Data) - we'll keep this.
-            # First, write a small summary of sample materiality levels in Sample Data sheet for the chart.
+            # Write formulas for each row
+            for row in range(2, len(party_final) + 2):
+                # If Yes, How much to be deducted = IF(D{row}="Yes", B{row} * E{row} / 100, 0)
+                party_ws.write_formula(row-1, f_col, f'=IF({col_letter(d_col)}{row}="Yes", {col_letter(b_col)}{row}*{col_letter(e_col)}{row}/100, 0)')
+                # Shortfall/Excess = C{row} - F{row}
+                party_ws.write_formula(row-1, g_col, f'={col_letter(c_col)}{row}-{col_letter(f_col)}{row}')
+                # Remarks = IF(G{row}>=0, "Compliant", "Not Compliant")
+                party_ws.write_formula(row-1, h_col, f'=IF({col_letter(g_col)}{row}>=0, "Compliant", "Not Compliant")')
+            
+            # Format columns
+            party_ws.set_column(b_col, b_col, 15, money_fmt)   # Taxable Value
+            party_ws.set_column(c_col, c_col, 15, money_fmt)   # TDS Deducted
+            party_ws.set_column(e_col, e_col, 12, percent_fmt) # Rate (%)
+            party_ws.set_column(f_col, f_col, 15, money_fmt)   # If Yes amount
+            party_ws.set_column(g_col, g_col, 15, money_fmt)   # Shortfall/Excess
+            party_ws.set_column(0, 0, 30)                      # Party Name
+            party_ws.set_column(d_col, d_col, 15)              # Applicability
+            party_ws.set_column(h_col, h_col, 20)              # Remarks
+
+            # --- Add chart to Executive Summary (Sample Composition Pie) ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
             sample_mat_summary.columns = ['Level','Count']
-            # Write this summary to Sample Data sheet starting at row 2 in columns Z and AA (for example)
+            # Write summary to Sample Data sheet at columns Z, AA
+            sample_ws = writer.sheets['Sample Data']
             for i, row in sample_mat_summary.iterrows():
-                sample_ws.write(i+1, 25, row['Level'])  # col Z
-                sample_ws.write(i+1, 26, row['Count'])  # col AA
-            chart2 = workbook.add_chart({'type':'pie'})
-            chart2.add_series({
+                sample_ws.write(i+1, 25, row['Level'])
+                sample_ws.write(i+1, 26, row['Count'])
+            chart = workbook.add_chart({'type':'pie'})
+            chart.add_series({
                 'name':'Sample Composition',
                 'categories':'=Sample Data!$Z$2:$Z${}'.format(len(sample_mat_summary)+1),
                 'values':'=Sample Data!$AA$2:$AA${}'.format(len(sample_mat_summary)+1),
                 'data_labels':{'percentage':True}
             })
-            chart2.set_title({'name':'Sample Composition by Materiality'})
-            chart2.set_style(10)
-            summ_ws.insert_chart('D2', chart2)  # place at D2
-
-            # Optionally, we could add a simple pie for overall materiality distribution using data from df, but that would require another sheet or table.
-            # We'll skip to keep it simple.
+            chart.set_title({'name':'Sample Composition by Materiality'})
+            chart.set_style(10)
+            summ_ws.insert_chart('D2', chart)
 
         return output.getvalue()
 
-# --- PARTY DASHBOARD (kept for UI, but export uses simplified version) ---
+# --- PARTY DASHBOARD (kept for UI) ---
 def create_party_dashboard(df):
     party_stats = df.groupby('Party name').agg({
         'taxable value': ['sum','count','mean'],
@@ -859,9 +862,9 @@ def main():
                     <ul>
                         <li>📊 Executive Summary with Sample Composition Chart</li>
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
-                        <li>📈 Analysis Sheet with all derived formulas (including separate CGST, SGST, IGST)</li>
-                        <li>🔍 Sample Data from All Methods (dates formatted)</li>
-                        <li>🏢 Simplified Party Analysis (as per your specification)</li>
+                        <li>📈 Analysis Sheet (full data, static, with all derived columns)</li>
+                        <li>🔍 Sample Data with formulas for Applied TDS Rate %, Required TDS, TDS Shortfall</li>
+                        <li>🏢 Enhanced Party Analysis with Rate column and formulas</li>
                         <li>📊 Sample Composition Pie Chart</li>
                     </ul>
                 </div>
