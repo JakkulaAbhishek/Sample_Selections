@@ -533,8 +533,8 @@ class ExcelExporter:
                 chart2 = workbook.add_chart({'type':'bar'})
                 chart2.add_series({
                     'name':'TDS Shortfall',
-                    'categories':'=Executive Summary!$D$19:$D${}'.format(19+len(non_compliant_parties)-1),
-                    'values':'=Executive Summary!$E$19:$E${}'.format(19+len(non_compliant_parties)-1),
+                    'categories':'=Executive Summary!$A$19:$D${}'.format(19+len(non_compliant_parties)-1),
+                    'values':'=Executive Summary!$A$19:$E${}'.format(19+len(non_compliant_parties)-1),
                 })
                 chart2.set_title({'name':'Top 10 Parties with TDS Shortfall'})
                 chart2.set_x_axis({'name':'Party'})
