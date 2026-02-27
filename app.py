@@ -563,9 +563,7 @@ class ExcelExporter:
                     col_letter = chr(65 + col_num)
                     formula = f'=SUM({col_letter}3:{col_letter}50000)'
                     sample_ws.write(0, col_num, formula, money_fmt)
-                else:
-                    sample_ws.write(0, col_num, 'Total')
-
+                
             col_indices = {name: idx for idx, name in enumerate(sample_df_out.columns)}
             taxable_col = col_indices.get('taxable value', 4)
             tds_deducted_col = col_indices.get('TDS deducted', 8)
