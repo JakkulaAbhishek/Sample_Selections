@@ -369,7 +369,7 @@ class SamplingEngine:
             return df.sample(n=min(n, len(df)), weights=prior, random_state=42)
         return df.sample(n=min(n, len(df)), random_state=42)
 
-# --- MODIFIED EXCEL EXPORTER (WITH REQUESTED CHANGES) ---
+# --- CORRECTED EXCEL EXPORTER ---
 class ExcelExporter:
     @staticmethod
     def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold):
@@ -380,51 +380,57 @@ class ExcelExporter:
             header_fmt = workbook.add_format({'bold':True, 'bg_color':'#00ff87', 'font_color':'#0a0f1e', 'border':1, 'align':'center', 'valign':'vcenter', 'font_size':11})
             money_fmt = workbook.add_format({'num_format':'₹#,##0.00'})
             percent_fmt = workbook.add_format({'num_format':'0.00%'})
+            comma_fmt = workbook.add_format({'num_format':'#,##0'})          # for integers
+            comma2_fmt = workbook.add_format({'num_format':'#,##0.00'})      # for decimals
             date_fmt = workbook.add_format({'num_format':'dd-mm-yyyy'})
 
-            # --- 0. TDS Rates Sheet (with percentage format) ---
+            # Helper to set column widths automatically
+            def set_auto_width(worksheet, df_slice, start_row=1):
+                for col_idx, col_name in enumerate(df_slice.columns):
+                    max_len = max(df_slice[col_name].astype(str).map(len).max(), len(col_name)) + 2
+                    worksheet.set_column(col_idx, col_idx, max_len)
+
+            # --- 0. TDS Rates Sheet (with percentage format on Rate column) ---
             tds_rates_data = [
-    ['Section', 'Explanation', 'Rate'],
-
-    ['192A', 'Premature withdrawal of Employees Provident Fund (before 5 years service)', 0.10],
-    ['193', 'Interest on securities such as debentures, bonds, government securities', 0.10],
-    ['194', 'Dividend paid by domestic company to resident shareholder', 0.10],
-    ['194A', 'Interest other than securities (bank interest, FD interest, loan interest)', 0.10],
-    ['194B', 'Winnings from lottery, crossword puzzles, game shows', 0.30],
-    ['194BA', 'Net winnings from online games', 0.30],
-    ['194BB', 'Winnings from horse races', 0.30],
-
-    ['194C ', 'Payment to individual or HUF contractor for carrying out any work contract', 0.01],
-    ['194C ', 'Payment to firm/company/LLP/others for carrying out any work contract', 0.02],
-    ['194C ', 'Payment to transport contractor owning ≤10 goods carriages and furnishing PAN declaration', 0.00],
-
-    ['194D', 'Insurance commission paid to insurance agents', 0.02],
-    ['194DA', 'Taxable portion of life insurance policy maturity proceeds', 0.02],
-    ['194EE', 'Payment from National Savings Scheme deposits', 0.10],
-    ['194G', 'Commission on sale of lottery tickets', 0.02],
-    ['194H', 'Commission or brokerage (excluding insurance commission)', 0.02],
-    ['194I', 'Rent for plant, machinery, land, building, furniture', 0.02],
-    ['194IA', 'Purchase of immovable property (other than agricultural land)', 0.10],
-    ['194IB', 'Rent exceeding ₹50,000 per month paid by individual/HUF not liable for audit', 0.02],
-    ['194J(a)', 'Fees for technical services (non-professional services)', 0.02],
-    ['194J(b)', 'Fees for professional services such as legal, medical, CA, consultancy', 0.10],
-    ['194LA', 'Compensation on compulsory acquisition of immovable property', 0.10],
-    ['194M', 'Contract payment/commission/professional fees by individual/HUF not liable to audit', 0.02],
-    ['194N', 'Cash withdrawal exceeding specified limits from bank/cooperative bank/post office', 0.02],
-    ['194O', 'E-commerce operator facilitating sale of goods/services through digital platform', 0.001],
-    ['194P', 'Specified senior citizen aged 75+ (specified bank responsible for tax computation)', 0.00],
-    ['194Q', 'Purchase of goods exceeding specified turnover and threshold limit', 0.001],
-    ['194R', 'Benefit or perquisite arising from business or profession', 0.10],
-    ['194S', 'Transfer of virtual digital assets (crypto etc.)', 0.01],
-    ['194T', 'Payment of salary, remuneration, commission, bonus or interest to partner by firm (as per your list)', 0.10]
+                ['Section', 'Explanation', 'Rate'],
+                ['192A', 'Premature withdrawal of Employees Provident Fund (before 5 years service)', 0.10],
+                ['193', 'Interest on securities such as debentures, bonds, government securities', 0.10],
+                ['194', 'Dividend paid by domestic company to resident shareholder', 0.10],
+                ['194A', 'Interest other than securities (bank interest, FD interest, loan interest)', 0.10],
+                ['194B', 'Winnings from lottery, crossword puzzles, game shows', 0.30],
+                ['194BA', 'Net winnings from online games', 0.30],
+                ['194BB', 'Winnings from horse races', 0.30],
+                ['194C', 'Payment to individual or HUF contractor for carrying out any work contract', 0.01],
+                ['194C', 'Payment to firm/company/LLP/others for carrying out any work contract', 0.02],
+                ['194C', 'Payment to transport contractor owning ≤10 goods carriages and furnishing PAN declaration', 0.00],
+                ['194D', 'Insurance commission paid to insurance agents', 0.02],
+                ['194DA', 'Taxable portion of life insurance policy maturity proceeds', 0.02],
+                ['194EE', 'Payment from National Savings Scheme deposits', 0.10],
+                ['194G', 'Commission on sale of lottery tickets', 0.02],
+                ['194H', 'Commission or brokerage (excluding insurance commission)', 0.02],
+                ['194I', 'Rent for plant, machinery, land, building, furniture', 0.02],
+                ['194IA', 'Purchase of immovable property (other than agricultural land)', 0.10],
+                ['194IB', 'Rent exceeding ₹50,000 per month paid by individual/HUF not liable for audit', 0.02],
+                ['194J(a)', 'Fees for technical services (non-professional services)', 0.02],
+                ['194J(b)', 'Fees for professional services such as legal, medical, CA, consultancy', 0.10],
+                ['194LA', 'Compensation on compulsory acquisition of immovable property', 0.10],
+                ['194M', 'Contract payment/commission/professional fees by individual/HUF not liable to audit', 0.02],
+                ['194N', 'Cash withdrawal exceeding specified limits from bank/cooperative bank/post office', 0.02],
+                ['194O', 'E-commerce operator facilitating sale of goods/services through digital platform', 0.001],
+                ['194P', 'Specified senior citizen aged 75+ (specified bank responsible for tax computation)', 0.00],
+                ['194Q', 'Purchase of goods exceeding specified turnover and threshold limit', 0.001],
+                ['194R', 'Benefit or perquisite arising from business or profession', 0.10],
+                ['194S', 'Transfer of virtual digital assets (crypto etc.)', 0.01],
+                ['194T', 'Payment of salary, remuneration, commission, bonus or interest to partner by firm', 0.10]
             ]
             tds_rates_df = pd.DataFrame(tds_rates_data[1:], columns=tds_rates_data[0])
             tds_rates_df.to_excel(writer, sheet_name='TDS Rates', index=False, startrow=1, header=False)
             tds_ws = writer.sheets['TDS Rates']
             for col_num, col_name in enumerate(tds_rates_df.columns):
                 tds_ws.write(0, col_num, col_name, header_fmt)
-            tds_ws.set_column('A:A', 20)
-            tds_ws.set_column('B:B', 15, percent_fmt)   # <-- set percentage format
+            tds_ws.set_column('A:A', 25)   # Section
+            tds_ws.set_column('B:B', 60)   # Explanation
+            tds_ws.set_column('C:C', 15, percent_fmt)   # Rate as percentage
 
             # --- 1. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
@@ -434,10 +440,11 @@ class ExcelExporter:
             ws_raw = writer.sheets['Complete Data']
             for col_num, col_name in enumerate(raw_cols):
                 ws_raw.write(0, col_num, col_name, header_fmt)
-            ws_raw.set_column(0, 0, 15)
-            ws_raw.set_column(1, 1, 30)
-            ws_raw.set_column(2, 2, 20)
-            ws_raw.set_column(3, 9, 15, money_fmt)
+            # Set column widths
+            ws_raw.set_column(0, 0, 15)   # Date
+            ws_raw.set_column(1, 1, 30)   # Party name
+            ws_raw.set_column(2, 2, 20)   # Invoice no
+            ws_raw.set_column(3, 9, 15, money_fmt)   # all numeric columns
 
             # --- 2. Executive Summary (with formulas in B3:B10) ---
             ws_summ = workbook.add_worksheet('Executive Summary')
@@ -465,39 +472,38 @@ class ExcelExporter:
             for i, label in enumerate(labels):
                 ws_summ.write(i+1, 0, label)
 
-            # Static values / formulas
             # Row 2 (Audit Date) - static
             ws_summ.write(1, 1, datetime.now().strftime('%d-%m-%Y %H:%M'))
 
-            # Row 3 (Total Transactions) - formula
-            ws_summ.write_formula(2, 1, '=COUNTA(\'Complete Data\'!A:A)-1')
+            # Row 3 (Total Transactions) - formula (integer)
+            ws_summ.write_formula(2, 1, '=COUNTA(\'Complete Data\'!A:A)-1', comma_fmt)
 
-            # Row 4 (Total Value) - formula
-            ws_summ.write_formula(3, 1, '=SUM(\'Complete Data\'!E:E)')
+            # Row 4 (Total Value) - formula (currency)
+            ws_summ.write_formula(3, 1, '=SUM(\'Complete Data\'!E:E)', money_fmt)
 
-            # Row 5 (Materiality Threshold) - static (user input)
-            ws_summ.write(4, 1, materiality_threshold)
+            # Row 5 (Materiality Threshold) - static (percentage)
+            ws_summ.write(4, 1, materiality_threshold / 100, percent_fmt)   # store as decimal with percent format
 
             # Row 6 (Materiality Amount) - formula = B4 * B5
-            ws_summ.write_formula(5, 1, '=B4*B5%')
+            ws_summ.write_formula(5, 1, '=B4*B5', money_fmt)
 
-            # Row 7 (Sample Size) - formula
-            ws_summ.write_formula(6, 1, '=COUNTA(\'Sample Data\'!A:A)-1')
+            # Row 7 (Sample Size) - formula (integer)
+            ws_summ.write_formula(6, 1, '=COUNTA(\'Sample Data\'!A:A)-1', comma_fmt)
 
             # Row 8 (Sample Percentage) - formula = B7 / B3
-            ws_summ.write_formula(7, 1, '=B7/B3')
+            ws_summ.write_formula(7, 1, '=B7/B3', percent_fmt)
 
-            # Row 9 (Sample Value) - formula
-            ws_summ.write_formula(8, 1, '=SUM(\'Sample Data\'!E:E)')
+            # Row 9 (Sample Value) - formula (currency)
+            ws_summ.write_formula(8, 1, '=SUM(\'Sample Data\'!E:E)', money_fmt)
 
             # Row 10 (Sample Coverage %) - formula = B9 / B4
-            ws_summ.write_formula(9, 1, '=B9/B4')
+            ws_summ.write_formula(9, 1, '=B9/B4', percent_fmt)
 
-            # Row 11-14 (Critical, High, Medium, Low) - static (from Python)
-            ws_summ.write(10, 1, len(df[df['Materiality Level']=='🔥 CRITICAL']))
-            ws_summ.write(11, 1, len(df[df['Materiality Level']=='⚡ HIGH']))
-            ws_summ.write(12, 1, len(df[df['Materiality Level']=='💫 MEDIUM']))
-            ws_summ.write(13, 1, len(df[df['Materiality Level']=='🌟 LOW']))
+            # Row 11-14 (Critical, High, Medium, Low) - static (integers)
+            ws_summ.write(10, 1, len(df[df['Materiality Level']=='🔥 CRITICAL']), comma_fmt)
+            ws_summ.write(11, 1, len(df[df['Materiality Level']=='⚡ HIGH']), comma_fmt)
+            ws_summ.write(12, 1, len(df[df['Materiality Level']=='💫 MEDIUM']), comma_fmt)
+            ws_summ.write(13, 1, len(df[df['Materiality Level']=='🌟 LOW']), comma_fmt)
 
             # Row 15 (Sampling Methods Used) - static
             ws_summ.write(14, 1, ', '.join(selected_methods))
@@ -505,6 +511,28 @@ class ExcelExporter:
             # Chart description
             ws_summ.write(16, 0, 'Chart Explanation:')
             ws_summ.write(16, 1, 'Pie chart shows distribution of sampled transactions by Materiality Level (Critical, High, Medium, Low, Immaterial).')
+
+            # Prepare data for TDS non-compliant parties chart
+            non_compliant_parties = df[df['TDS Shortfall'] > 0].groupby('Party name')['TDS Shortfall'].sum().nlargest(10).reset_index()
+            if len(non_compliant_parties) > 0:
+                # Write data to hidden columns (e.g., D:E) for chart
+                ws_summ.write(18, 3, 'Party')
+                ws_summ.write(18, 4, 'Shortfall')
+                for i, row in non_compliant_parties.iterrows():
+                    ws_summ.write(19+i, 3, row['Party name'])
+                    ws_summ.write(19+i, 4, row['TDS Shortfall'], money_fmt)
+                # Create bar chart
+                chart2 = workbook.add_chart({'type':'bar'})
+                chart2.add_series({
+                    'name':'TDS Shortfall',
+                    'categories':'=Executive Summary!$D$19:$D${}'.format(19+len(non_compliant_parties)-1),
+                    'values':'=Executive Summary!$E$19:$E${}'.format(19+len(non_compliant_parties)-1),
+                })
+                chart2.set_title({'name':'Top 10 Parties with TDS Shortfall'})
+                chart2.set_x_axis({'name':'Party'})
+                chart2.set_y_axis({'name':'Shortfall (₹)'})
+                chart2.set_style(11)
+                ws_summ.insert_chart('F18', chart2)
 
             ws_summ.set_column('A:A', 30)
             ws_summ.set_column('B:B', 40)
@@ -536,49 +564,46 @@ class ExcelExporter:
                 # Total GST
                 if total_gst_col is not None:
                     total_gst_formula = f'=SUM({chr(65+cgst_col)}{row}:{chr(65+igst_col)}{row})'
-                    sample_ws.write_formula(row-1, total_gst_col, total_gst_formula)
+                    sample_ws.write_formula(row-1, total_gst_col, total_gst_formula, money_fmt)
                 # GST Rate %
                 if total_gst_col is not None and taxable_col is not None:
                     gst_rate_idx = col_indices.get('GST Rate %', None)
                     if gst_rate_idx is not None:
-                        sample_ws.write_formula(row-1, gst_rate_idx, f'={chr(65+total_gst_col)}{row}/{chr(65+taxable_col)}{row}')
+                        sample_ws.write_formula(row-1, gst_rate_idx, f'={chr(65+total_gst_col)}{row}/{chr(65+taxable_col)}{row}', percent_fmt)
                 # Std TDS Rate %
                 if std_tds_rate_col is not None:
                     std_formula = f"=IFERROR(VLOOKUP({chr(65+tds_section_col)}{row},'TDS Rates'!$A$2:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
-                    sample_ws.write_formula(row-1, std_tds_rate_col, std_formula)
+                    sample_ws.write_formula(row-1, std_tds_rate_col, std_formula, percent_fmt)
                 # Applied TDS Rate %
                 if applied_tds_rate_col is not None:
                     applied_formula = f'={chr(65+tds_deducted_col)}{row}/{chr(65+taxable_col)}{row}'
-                    sample_ws.write_formula(row-1, applied_tds_rate_col, applied_formula)
+                    sample_ws.write_formula(row-1, applied_tds_rate_col, applied_formula, percent_fmt)
                 # Required TDS
                 if required_tds_col is not None and std_tds_rate_col is not None:
                     required_formula = f'={chr(65+taxable_col)}{row}*{chr(65+std_tds_rate_col)}{row}'
-                    sample_ws.write_formula(row-1, required_tds_col, required_formula)
+                    sample_ws.write_formula(row-1, required_tds_col, required_formula, money_fmt)
                 # TDS Shortfall (I2 - O2 as per user)
                 if tds_shortfall_col is not None and required_tds_col is not None:
                     shortfall_formula = f'={chr(65+tds_deducted_col)}{row}-{chr(65+required_tds_col)}{row}'
-                    sample_ws.write_formula(row-1, tds_shortfall_col, shortfall_formula)
+                    sample_ws.write_formula(row-1, tds_shortfall_col, shortfall_formula, money_fmt)
                 # TDS Compliance %
                 if tds_compliance_col is not None and required_tds_col is not None:
                     compliance_formula = f'=IF({chr(65+required_tds_col)}{row}=0,1,{chr(65+tds_deducted_col)}{row}/{chr(65+required_tds_col)}{row})'
-                    sample_ws.write_formula(row-1, tds_compliance_col, compliance_formula)
+                    sample_ws.write_formula(row-1, tds_compliance_col, compliance_formula, percent_fmt)
 
-            # Apply formatting to Sample Data columns
+            # Apply formatting to Sample Data columns (already done via write_formula formats, but also set column widths)
+            sample_ws.set_column(0, 0, 15)   # Date
+            sample_ws.set_column(1, 1, 30)   # Party name
+            sample_ws.set_column(2, 2, 20)   # Invoice no
             for col_num, col_name in enumerate(sample_df_out.columns):
                 if col_name in ['Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','Total GST','Required TDS','Interest Payable','Net Payable']:
                     sample_ws.set_column(col_num, col_num, 15, money_fmt)
                 elif col_name in ['GST Rate %','Std TDS Rate %','Applied TDS Rate %','TDS Compliance %']:
                     sample_ws.set_column(col_num, col_num, 12, percent_fmt)
-                elif col_name == 'Date':
-                    sample_ws.set_column(col_num, col_num, 15)
-                elif col_name == 'Party name':
-                    sample_ws.set_column(col_num, col_num, 30)
-                elif col_name == 'Invoice no':
-                    sample_ws.set_column(col_num, col_num, 20)
                 else:
                     sample_ws.set_column(col_num, col_num, 15)
 
-            # --- 4. NEW Analysis Sheet (full data, same formulas as Sample Data) ---
+            # --- 4. Analysis Sheet (full data, same formulas as Sample Data) ---
             analysis_df = df.copy()  # full dataset with all derived columns
             if 'Date' in analysis_df.columns:
                 analysis_df['Date'] = pd.to_datetime(analysis_df['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
@@ -607,44 +632,41 @@ class ExcelExporter:
                 # Total GST
                 if a_total_gst is not None:
                     analysis_ws.write_formula(row-1, a_total_gst,
-                        f'=SUM({chr(65+a_cgst)}{row}:{chr(65+a_igst)}{row})')
+                        f'=SUM({chr(65+a_cgst)}{row}:{chr(65+a_igst)}{row})', money_fmt)
                 # GST Rate %
                 if a_gst_rate is not None and a_total_gst is not None:
                     analysis_ws.write_formula(row-1, a_gst_rate,
-                        f'={chr(65+a_total_gst)}{row}/{chr(65+a_taxable)}{row}')
+                        f'={chr(65+a_total_gst)}{row}/{chr(65+a_taxable)}{row}', percent_fmt)
                 # Std TDS Rate %
                 if a_std_rate is not None:
-                    analysis_ws.write_formula(row-1, a_std_rate,
-                        f"=IFERROR(VLOOKUP({chr(65+tds_section_col)}{row},'TDS Rates'!$A$2:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
+                    std_formula = f"=IFERROR(VLOOKUP({chr(65+a_tds_section)}{row},'TDS Rates'!$A$2:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
+                    analysis_ws.write_formula(row-1, a_std_rate, std_formula, percent_fmt)
                 # Applied TDS Rate %
                 if a_applied_rate is not None:
                     analysis_ws.write_formula(row-1, a_applied_rate,
-                        f'={chr(65+a_tds_deducted)}{row}/{chr(65+a_taxable)}{row}')
+                        f'={chr(65+a_tds_deducted)}{row}/{chr(65+a_taxable)}{row}', percent_fmt)
                 # Required TDS
                 if a_required is not None and a_std_rate is not None:
                     analysis_ws.write_formula(row-1, a_required,
-                        f'={chr(65+a_taxable)}{row}*{chr(65+a_std_rate)}{row}')
+                        f'={chr(65+a_taxable)}{row}*{chr(65+a_std_rate)}{row}', money_fmt)
                 # TDS Shortfall
                 if a_shortfall is not None and a_required is not None:
                     analysis_ws.write_formula(row-1, a_shortfall,
-                        f'={chr(65+a_tds_deducted)}{row}-{chr(65+a_required)}{row}')
+                        f'={chr(65+a_tds_deducted)}{row}-{chr(65+a_required)}{row}', money_fmt)
                 # TDS Compliance %
                 if a_compliance is not None and a_required is not None:
                     analysis_ws.write_formula(row-1, a_compliance,
-                        f'=IF({chr(65+a_required)}{row}=0,1,{chr(65+a_tds_deducted)}{row}/{chr(65+a_required)}{row})')
+                        f'=IF({chr(65+a_required)}{row}=0,1,{chr(65+a_tds_deducted)}{row}/{chr(65+a_required)}{row})', percent_fmt)
 
             # Apply formatting to Analysis sheet
+            analysis_ws.set_column(0, 0, 15)   # Date
+            analysis_ws.set_column(1, 1, 30)   # Party name
+            analysis_ws.set_column(2, 2, 20)   # Invoice no
             for col_num, col_name in enumerate(analysis_df.columns):
                 if col_name in ['Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','Total GST','Required TDS','Interest Payable','Net Payable']:
                     analysis_ws.set_column(col_num, col_num, 15, money_fmt)
                 elif col_name in ['GST Rate %','Std TDS Rate %','Applied TDS Rate %','TDS Compliance %']:
                     analysis_ws.set_column(col_num, col_num, 12, percent_fmt)
-                elif col_name == 'Date':
-                    analysis_ws.set_column(col_num, col_num, 15)
-                elif col_name == 'Party name':
-                    analysis_ws.set_column(col_num, col_num, 30)
-                elif col_name == 'Invoice no':
-                    analysis_ws.set_column(col_num, col_num, 20)
                 else:
                     analysis_ws.set_column(col_num, col_num, 15)
 
@@ -678,22 +700,22 @@ class ExcelExporter:
             
             for row in range(2, len(party_final) + 2):
                 party_name_cell = f'A{row}'
-                party_ws.write_formula(row-1, 1, f'=SUMIF(\'Complete Data\'!B:B, {party_name_cell}, \'Complete Data\'!E:E)')
-                party_ws.write_formula(row-1, 2, f'=SUMIF(\'Complete Data\'!B:B, {party_name_cell}, \'Complete Data\'!I:I)')
-                party_ws.write_formula(row-1, 5, f'={chr(65+1)}{row}*{chr(65+4)}{row}')
-                party_ws.write_formula(row-1, 6, f'={chr(65+2)}{row}-{chr(65+5)}{row}')
+                party_ws.write_formula(row-1, 1, f'=SUMIF(\'Complete Data\'!B:B, {party_name_cell}, \'Complete Data\'!E:E)', money_fmt)
+                party_ws.write_formula(row-1, 2, f'=SUMIF(\'Complete Data\'!B:B, {party_name_cell}, \'Complete Data\'!I:I)', money_fmt)
+                party_ws.write_formula(row-1, 5, f'={chr(65+1)}{row}*{chr(65+4)}{row}', money_fmt)
+                party_ws.write_formula(row-1, 6, f'={chr(65+2)}{row}-{chr(65+5)}{row}', money_fmt)
                 party_ws.write_formula(row-1, 7, f'=IF({chr(65+6)}{row}>=0, "Compliant", "Not Compliant")')
             
-            party_ws.set_column(1, 1, 15, money_fmt)
-            party_ws.set_column(2, 2, 15, money_fmt)
-            party_ws.set_column(4, 4, 12, percent_fmt)
-            party_ws.set_column(5, 5, 15, money_fmt)
-            party_ws.set_column(6, 6, 15, money_fmt)
-            party_ws.set_column(0, 0, 30)
-            party_ws.set_column(3, 3, 15)
-            party_ws.set_column(7, 7, 20)
+            party_ws.set_column(1, 1, 15, money_fmt)   # Taxable Value
+            party_ws.set_column(2, 2, 15, money_fmt)   # TDS Deducted
+            party_ws.set_column(4, 4, 12, percent_fmt) # Rate (decimal) as percentage? Actually it's decimal, but we format as percentage for clarity.
+            party_ws.set_column(5, 5, 15, money_fmt)   # If Yes amount
+            party_ws.set_column(6, 6, 15, money_fmt)   # Shortfall/Excess
+            party_ws.set_column(0, 0, 30)              # Party Name
+            party_ws.set_column(3, 3, 15)              # TDS Applicability
+            party_ws.set_column(7, 7, 20)              # Remarks
 
-            # --- Add chart to Executive Summary ---
+            # --- Add pie chart to Executive Summary ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
             sample_mat_summary.columns = ['Level','Count']
             # Write summary to Sample Data sheet at columns Z, AA (for chart data)
@@ -943,6 +965,7 @@ def main():
                         <li>📊 Analysis Sheet (full data with same formulas as Sample Data)</li>
                         <li>🏢 Party Analysis with SUMIF for Taxable Value and TDS Deducted, and formula for If Yes column (=B2*E2)</li>
                         <li>📊 Sample Composition Pie Chart with description</li>
+                        <li>📊 TDS Non-Compliant Parties Bar Chart</li>
                     </ul>
                 </div>
                 """, unsafe_allow_html=True)
