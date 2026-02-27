@@ -448,8 +448,6 @@ class ExcelExporter:
                     col_letter = chr(65 + col_num)
                     formula = f'=SUM({col_letter}3:{col_letter}50000)'
                     ws_raw.write(0, col_num, formula, money_fmt)
-                else:
-                    ws_raw.write(0, col_num, 'Total')   # or leave blank
             # Set column widths
             ws_raw.set_column(0, 0, 15)   # Date
             ws_raw.set_column(1, 1, 30)   # Party name
