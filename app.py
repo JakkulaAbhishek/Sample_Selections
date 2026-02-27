@@ -45,7 +45,7 @@ st.markdown("""
 <div class="cyber-header">
     <h1 style="font-family: 'Orbitron', sans-serif; font-size: 3.5rem; margin:0; color: white; text-align: center;">⚡ ULTRA-AUDIT PRO ⚡</h1>
     <p style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; text-align: center; color: rgba(255,255,255,0.9); margin-top: 10px;">
-        Next-Gen AI-Powered Audit Intelligence | 25+ Sampling Methods | Multi-Method Selection
+        Next-Gen AI-Powered Audit Intelligence | 25+ Sampling Methods | Multi-Method Selection | TDS Check
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -54,11 +54,11 @@ st.markdown("""
 @st.cache_data
 def generate_sample_data():
     sample_data = [
-        ["01-04-2023", "Precision Engineering Works", "PEW/001/23-24", 135405.00, 114750.00, 10327.50, 10327.50, 0.00, 1147.50, "194C"],
-        ["05-04-2023", "Vijayalakshmi Electricals", "ST/23-24/468", 78479.44, 66508.00, 5985.72, 5985.72, 0.00, 665.08, "194C"],
-        ["10-04-2023", "Geeta Steel Traders", "533", 25250.14, 21322.16, 1963.99, 1963.99, 0.00, 213.22, "194C"],
-        ["15-04-2023", "Roots Multiclient Ltd", "6112303938", 10664.84, 9038.00, 0.00, 0.00, 1626.84, 90.38, "194C"],
-        ["20-04-2023", "Shri Aajii Industrial", "SAI/787/23-24", 67021.01, 5605.00, 512.55, 512.55, 0.00, 56.05, "194C"],
+        ["01-04-2023", "AAAA", "PEW/001/23-24", 135405.00, 114750.00, 10327.50, 10327.50, 0.00, 1147.50, "194C"],
+        ["05-04-2023", "BBBB", "ST/23-24/468", 78479.44, 66508.00, 5985.72, 5985.72, 0.00, 665.08, "194C"],
+        ["10-04-2023", "CCCC", "533", 25250.14, 21322.16, 1963.99, 1963.99, 0.00, 213.22, "194C"],
+        ["15-04-2023", "DDDD", "6112303938", 10664.84, 9038.00, 0.00, 0.00, 1626.84, 90.38, "194C"],
+        ["20-04-2023", "EEEE", "SAI/787/23-24", 67021.01, 5605.00, 512.55, 512.55, 0.00, 56.05, "194C"],
     ]
     return pd.DataFrame(sample_data, columns=['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section'])
 
