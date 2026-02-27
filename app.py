@@ -615,7 +615,7 @@ class ExcelExporter:
                 # Std TDS Rate %
                 if a_std_rate is not None:
                     analysis_ws.write_formula(row-1, a_std_rate,
-                        f'=IFERROR(VLOOKUP({chr(65+a_tds_section)}{row},\'TDS Rates\'!$A$2:$C$100,3,FALSE),'Please Enter TDS Section rate as per TDS rates sheet')
+                        f'=IFERROR(VLOOKUP({chr(65+a_tds_section)}{row},\'TDS Rates\'!$A$2:$C$100,3,FALSE),'Please Enter TDS Section rate as per TDS rates sheet')'
                 # Applied TDS Rate %
                 if a_applied_rate is not None:
                     analysis_ws.write_formula(row-1, a_applied_rate,
