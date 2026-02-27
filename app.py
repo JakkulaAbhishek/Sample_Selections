@@ -384,34 +384,39 @@ class ExcelExporter:
 
             # --- 0. TDS Rates Sheet (with percentage format) ---
             tds_rates_data = [
-                ['Section', 'Rate'],
-                ['192A', 0.10],
-                ['193', 0.10],
-                ['194', 0.10],
-                ['194A', 0.10],
-                ['194B', 0.30],
-                ['194BA', 0.30],
-                ['194BB', 0.30],
-                ['194C', 0.01],
-                ['194D', 0.02],
-                ['194DA', 0.02],
-                ['194EE', 0.10],
-                ['194G', 0.02],
-                ['194H', 0.02],
-                ['194I', 0.02],
-                ['194IA', 0.10],
-                ['194IB', 0.02],
-                ['194J(a)', 0.02],
-                ['194J(b)', 0.10],
-                ['194LA', 0.10],
-                ['194M', 0.02],
-                ['194N', 0.02],
-                ['194O', 0.001],
-                ['194P', 0.00],
-                ['194Q', 0.001],
-                ['194R', 0.10],
-                ['194S', 0.01],
-                ['194T', 0.10]
+    ['Section', 'Explanation', 'Rate'],
+
+    ['192A', 'Premature withdrawal of Employees Provident Fund (before 5 years service)', 0.10],
+    ['193', 'Interest on securities such as debentures, bonds, government securities', 0.10],
+    ['194', 'Dividend paid by domestic company to resident shareholder', 0.10],
+    ['194A', 'Interest other than securities (bank interest, FD interest, loan interest)', 0.10],
+    ['194B', 'Winnings from lottery, crossword puzzles, game shows', 0.30],
+    ['194BA', 'Net winnings from online games', 0.30],
+    ['194BB', 'Winnings from horse races', 0.30],
+
+    ['194C Individual / HUF', 'Payment to individual or HUF contractor for carrying out any work contract', 0.01],
+    ['194C Firm / Company / LLP / Others', 'Payment to firm/company/LLP/others for carrying out any work contract', 0.02],
+    ['194C Transport contractor (with PAN, ≤10 goods carriages)', 'Payment to transport contractor owning ≤10 goods carriages and furnishing PAN declaration', 0.00],
+
+    ['194D', 'Insurance commission paid to insurance agents', 0.02],
+    ['194DA', 'Taxable portion of life insurance policy maturity proceeds', 0.02],
+    ['194EE', 'Payment from National Savings Scheme deposits', 0.10],
+    ['194G', 'Commission on sale of lottery tickets', 0.02],
+    ['194H', 'Commission or brokerage (excluding insurance commission)', 0.02],
+    ['194I', 'Rent for plant, machinery, land, building, furniture', 0.02],
+    ['194IA', 'Purchase of immovable property (other than agricultural land)', 0.10],
+    ['194IB', 'Rent exceeding ₹50,000 per month paid by individual/HUF not liable for audit', 0.02],
+    ['194J(a)', 'Fees for technical services (non-professional services)', 0.02],
+    ['194J(b)', 'Fees for professional services such as legal, medical, CA, consultancy', 0.10],
+    ['194LA', 'Compensation on compulsory acquisition of immovable property', 0.10],
+    ['194M', 'Contract payment/commission/professional fees by individual/HUF not liable to audit', 0.02],
+    ['194N', 'Cash withdrawal exceeding specified limits from bank/cooperative bank/post office', 0.02],
+    ['194O', 'E-commerce operator facilitating sale of goods/services through digital platform', 0.001],
+    ['194P', 'Specified senior citizen aged 75+ (specified bank responsible for tax computation)', 0.00],
+    ['194Q', 'Purchase of goods exceeding specified turnover and threshold limit', 0.001],
+    ['194R', 'Benefit or perquisite arising from business or profession', 0.10],
+    ['194S', 'Transfer of virtual digital assets (crypto etc.)', 0.01],
+    ['194T', 'Payment of salary, remuneration, commission, bonus or interest to partner by firm (as per your list)', 0.10]
             ]
             tds_rates_df = pd.DataFrame(tds_rates_data[1:], columns=tds_rates_data[0])
             tds_rates_df.to_excel(writer, sheet_name='TDS Rates', index=False, startrow=1, header=False)
@@ -474,7 +479,7 @@ class ExcelExporter:
             ws_summ.write(4, 1, materiality_threshold)
 
             # Row 6 (Materiality Amount) - formula = B4 * B5
-            ws_summ.write_formula(5, 1, '=B4*B5')
+            ws_summ.write_formula(5, 1, '=B4*B5%')
 
             # Row 7 (Sample Size) - formula
             ws_summ.write_formula(6, 1, '=COUNTA(\'Sample Data\'!A:A)-1')
