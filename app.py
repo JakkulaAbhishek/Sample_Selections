@@ -544,7 +544,7 @@ class ExcelExporter:
                         sample_ws.write_formula(row-1, gst_rate_idx, f'={chr(65+total_gst_col)}{row}/{chr(65+taxable_col)}{row}')
                 # Std TDS Rate %
                 if std_tds_rate_col is not None:
-                    std_formula = f'=IFERROR(VLOOKUP({chr(65+tds_section_col)}{row},\'TDS Rates\'!$A$2:$C$100,3,FALSE),0.01)'
+                    std_formula = f'=IFERROR(VLOOKUP({chr(65+tds_section_col)}{row},\'TDS Rates\'!$A$2:$C$100,3,FALSE),'Please Enter TDS Section rate as per TDS rates sheet')'
                     sample_ws.write_formula(row-1, std_tds_rate_col, std_formula)
                 # Applied TDS Rate %
                 if applied_tds_rate_col is not None:
@@ -615,7 +615,7 @@ class ExcelExporter:
                 # Std TDS Rate %
                 if a_std_rate is not None:
                     analysis_ws.write_formula(row-1, a_std_rate,
-                        f'=IFERROR(VLOOKUP({chr(65+a_tds_section)}{row},\'TDS Rates\'!$A$2:$C$100,3,FALSE),0.01)')
+                        f'=IFERROR(VLOOKUP({chr(65+a_tds_section)}{row},\'TDS Rates\'!$A$2:$C$100,3,FALSE),'Please Enter TDS Section rate as per TDS rates sheet')')
                 # Applied TDS Rate %
                 if a_applied_rate is not None:
                     analysis_ws.write_formula(row-1, a_applied_rate,
