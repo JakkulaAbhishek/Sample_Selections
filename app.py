@@ -642,8 +642,6 @@ class ExcelExporter:
                     col_letter = chr(65 + col_num)
                     formula = f'=SUM({col_letter}3:{col_letter}50000)'
                     analysis_ws.write(0, col_num, formula, money_fmt)
-                else:
-                    analysis_ws.write(0, col_num, 'Total')
 
             # Get column indices for analysis sheet
             a_col_indices = {name: idx for idx, name in enumerate(analysis_df.columns)}
