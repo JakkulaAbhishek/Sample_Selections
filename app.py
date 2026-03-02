@@ -65,35 +65,70 @@ def generate_sample_data():
 # --- TDS RATES WITH LIMITS (used for calculations and Excel export) ---
 TDS_RATES_DATA = [
     ['Section', 'Explanation', 'Rate', 'Limit'],
-    ['192A', 'Premature withdrawal of Employees Provident Fund (before 5 years service)', 0.10, 0],
-    ['193', 'Interest on securities such as debentures, bonds, government securities', 0.10, 0],
-    ['194', 'Dividend paid by domestic company to resident shareholder', 0.10, 0],
-    ['194A', 'Interest other than securities (bank interest, FD interest, loan interest)', 0.10, 0],
-    ['194B', 'Winnings from lottery, crossword puzzles, game shows', 0.30, 0],
-    ['194BA', 'Net winnings from online games', 0.30, 0],
-    ['194BB', 'Winnings from horse races', 0.30, 0],
-    ['194C', 'Payment to individual or HUF contractor for carrying out any work contract', 0.01, 30000],
-    ['194C', 'Payment to firm/company/LLP/others for carrying out any work contract', 0.02, 30000],
-    ['194C', 'Payment to transport contractor owning ≤10 goods carriages and furnishing PAN declaration', 0.00, 0],
-    ['194D', 'Insurance commission paid to insurance agents', 0.02, 0],
-    ['194DA', 'Taxable portion of life insurance policy maturity proceeds', 0.02, 0],
-    ['194EE', 'Payment from National Savings Scheme deposits', 0.10, 0],
-    ['194G', 'Commission on sale of lottery tickets', 0.02, 0],
-    ['194H', 'Commission or brokerage (excluding insurance commission)', 0.02, 0],
-    ['194I', 'Rent for plant, machinery, land, building, furniture', 0.02, 15000],  # per month proxy
-    ['194IA', 'Purchase of immovable property (other than agricultural land)', 0.10, 0],
-    ['194IB', 'Rent exceeding ₹50,000 per month paid by individual/HUF not liable for audit', 0.02, 50000],
-    ['194J(a)', 'Fees for technical services (non-professional services)', 0.02, 30000],
-    ['194J(b)', 'Fees for professional services such as legal, medical, CA, consultancy', 0.10, 30000],
-    ['194LA', 'Compensation on compulsory acquisition of immovable property', 0.10, 0],
-    ['194M', 'Contract payment/commission/professional fees by individual/HUF not liable to audit', 0.02, 0],
-    ['194N', 'Cash withdrawal exceeding specified limits from bank/cooperative bank/post office', 0.02, 0],
-    ['194O', 'E-commerce operator facilitating sale of goods/services through digital platform', 0.001, 0],
-    ['194P', 'Specified senior citizen aged 75+ (specified bank responsible for tax computation)', 0.00, 0],
-    ['194Q', 'Purchase of goods exceeding specified turnover and threshold limit', 0.001, 0],
-    ['194R', 'Benefit or perquisite arising from business or profession', 0.10, 0],
-    ['194S', 'Transfer of virtual digital assets (crypto etc.)', 0.01, 0],
-    ['194T', 'Payment of salary, remuneration, commission, bonus or interest to partner by firm', 0.10, 0]
+
+    ['192', 'Salary', 'Slab rates', 'Basic exemption limit'],
+
+    ['192A', 'Premature withdrawal from EPF', '10%', '50000'],
+
+    ['193', 'Interest on Securities', '10%', '10000'],
+
+    ['194', 'Dividends', '10%', '10000'],
+
+    ['194A', 'Interest (Bank/Post Office)', '10%', '50000'],
+
+    ['194B', 'Winnings (Lottery/Puzzle)', '30%', '10000 (Single Transaction)'],
+
+    ['194BA', 'Online gaming winnings', '30%', '0'],
+
+    ['194BB', 'Winnings from horse races', '30%', '10000'],
+
+    ['194C', 'Payment to contractors – Individual/HUF', '1%', '100000'],
+
+    ['194C', 'Payment to contractors – Others', '2%', '100000'],
+
+    ['194D', 'Insurance Commission – Individual/HUF', '2%', '20000'],
+
+    ['194D', 'Insurance Commission – Others', '10%', '20000'],
+
+    ['194DA', 'Life Insurance Policy payment', '2%', '100000'],
+
+    ['194EE', 'NSS Deposits', '10%', '2500'],
+
+    ['194G', 'Lottery Commission', '2%', '20000'],
+
+    ['194H', 'Commission or Brokerage', '2%', '20000'],
+
+    ['194I', 'Rent – Plant & Machinery', '2%', '600000'],
+
+    ['194I', 'Rent – Land/Building/Furniture', '10%', '600000'],
+
+    ['194IB', 'Rent (Ind/HUF not under 194I)', '2%', '600000'],
+
+    ['194J(a)', 'Tech Services/Royalty/Call Centre', '2%', '50000'],
+
+    ['194J(b)', 'Professional Services', '10%', '50000'],
+
+    ['194LA', 'Enhanced Compensation (Property)', '10%', '500000'],
+
+    ['194M', 'Payment for Contracts/Professional Fees', '2%', '5000000'],
+
+    ['194N', 'Cash withdrawal – Normal cases', '2%', '2000000'],
+
+    ['194N', 'Cash withdrawal – Specified cases (non-filer)', '5%', '10000000'],
+
+    ['194O', 'E-commerce participants', '0.10%', '500000'],
+
+    ['194P', 'Specified Senior Citizen', 'Slab Rates', 'Basic Exemption'],
+
+    ['194Q', 'Purchase of Goods', '0.10%', '5000000'],
+
+    ['194R', 'Benefits/Perquisites (Business)', '10%', '20000'],
+
+    ['194S', 'Virtual Digital Assets – Normal Person', '1%', '10000'],
+
+    ['194S', 'Virtual Digital Assets – Specified Person (Ind/HUF not liable to audit)', '1%', '50000'],
+
+    ['194T', 'Payment to Partner of Firm', '10%', '20000']
 ]
 
 # Build a dictionary for quick lookup in Python
