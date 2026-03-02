@@ -62,76 +62,44 @@ def generate_sample_data():
     ]
     return pd.DataFrame(sample_data, columns=['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section'])
 
-# --- TDS RATES WITH LIMITS (used for calculations and Excel export) ---
+# --- TDS RATES WITH LIMITS (updated with more realistic descriptions and limits) ---
 TDS_RATES_DATA = [
     ['Section', 'Explanation', 'Rate', 'Limit'],
-
     ['192', 'Salary', 'Slab rates', 'Basic exemption limit'],
-
     ['192A', 'Premature withdrawal from EPF', '10%', '50000'],
-
     ['193', 'Interest on Securities', '10%', '10000'],
-
     ['194', 'Dividends', '10%', '10000'],
-
     ['194A', 'Interest (Bank/Post Office)', '10%', '50000'],
-
     ['194B', 'Winnings (Lottery/Puzzle)', '30%', '10000 (Single Transaction)'],
-
     ['194BA', 'Online gaming winnings', '30%', '0'],
-
     ['194BB', 'Winnings from horse races', '30%', '10000'],
-
     ['194C', 'Payment to contractors – Individual/HUF', '1%', '100000'],
-
     ['194C', 'Payment to contractors – Others', '2%', '100000'],
-
     ['194D', 'Insurance Commission – Individual/HUF', '2%', '20000'],
-
     ['194D', 'Insurance Commission – Others', '10%', '20000'],
-
     ['194DA', 'Life Insurance Policy payment', '2%', '100000'],
-
     ['194EE', 'NSS Deposits', '10%', '2500'],
-
     ['194G', 'Lottery Commission', '2%', '20000'],
-
     ['194H', 'Commission or Brokerage', '2%', '20000'],
-
     ['194I', 'Rent – Plant & Machinery', '2%', '600000'],
-
     ['194I', 'Rent – Land/Building/Furniture', '10%', '600000'],
-
     ['194IB', 'Rent (Ind/HUF not under 194I)', '2%', '600000'],
-
     ['194J(a)', 'Tech Services/Royalty/Call Centre', '2%', '50000'],
-
     ['194J(b)', 'Professional Services', '10%', '50000'],
-
     ['194LA', 'Enhanced Compensation (Property)', '10%', '500000'],
-
     ['194M', 'Payment for Contracts/Professional Fees', '2%', '5000000'],
-
     ['194N', 'Cash withdrawal – Normal cases', '2%', '2000000'],
-
     ['194N', 'Cash withdrawal – Specified cases (non-filer)', '5%', '10000000'],
-
     ['194O', 'E-commerce participants', '0.10%', '500000'],
-
     ['194P', 'Specified Senior Citizen', 'Slab Rates', 'Basic Exemption'],
-
     ['194Q', 'Purchase of Goods', '0.10%', '5000000'],
-
     ['194R', 'Benefits/Perquisites (Business)', '10%', '20000'],
-
     ['194S', 'Virtual Digital Assets – Normal Person', '1%', '10000'],
-
     ['194S', 'Virtual Digital Assets – Specified Person (Ind/HUF not liable to audit)', '1%', '50000'],
-
     ['194T', 'Payment to Partner of Firm', '10%', '20000']
 ]
 
-# Build a dictionary for quick lookup in Python
+# Build dictionaries for quick lookup
 tds_rate_dict = {}
 tds_limit_dict = {}
 for row in TDS_RATES_DATA[1:]:
@@ -158,8 +126,12 @@ class DataProcessor:
         df['GST Rate %'] = df['GST Rate %'].fillna(0).round(2)
 
         # Standard TDS rates and limits from dictionary
-        df['Std TDS Rate %'] = df['TDS Section'].map(lambda x: tds_rate_dict.get(str(x).strip().upper(), 0.01) * 100)  # store as percentage
+        df['Std TDS Rate %'] = df['TDS Section'].map(lambda x: tds_rate_dict.get(str(x).strip().upper(), '1%'))
+        # Convert string rates like '1%' to numeric 1.0
+        df['Std TDS Rate %'] = df['Std TDS Rate %'].astype(str).str.replace('%', '').astype(float) / 100 * 100  # store as percentage
         df['TDS Limit'] = df['TDS Section'].map(lambda x: tds_limit_dict.get(str(x).strip().upper(), 0))
+        # Convert limit strings like '100000' to numeric, handle non-numeric (e.g., 'Basic exemption limit')
+        df['TDS Limit'] = pd.to_numeric(df['TDS Limit'], errors='coerce').fillna(0)
 
         # TDS Applicable flag (True if taxable value > limit)
         df['TDS Applicable'] = df['taxable value'] > df['TDS Limit']
@@ -192,13 +164,13 @@ class DataProcessor:
         choices = ['✅ FULLY COMPLIANT', '⚠️ PARTIAL SHORTFALL', '❌ NOT DEDUCTED']
         df['Compliance Status'] = np.select(conditions, choices, default='✅ FULLY COMPLIANT')
 
-        # TDS Compliance % (capped at 100% for display, but can be >100% if excess deducted)
+        # TDS Compliance % (capped at 100% for display)
         df['TDS Compliance %'] = np.where(df['Required TDS'] > 0,
                                           (df['TDS deducted'] / df['Required TDS'] * 100).clip(upper=100).round(2),
                                           100.0)
         return df
 
-# --- MATERIALITY ENGINE (unchanged) ---
+# --- MATERIALITY ENGINE ---
 class MaterialityEngine:
     def __init__(self, threshold=5.0):
         self.threshold = threshold
@@ -219,9 +191,8 @@ class MaterialityEngine:
         df['Audit Priority'] = df['Materiality Level'].map(priority_map)
         return df, total, materiality_amount
 
-# --- SAMPLING ENGINE (unchanged) ---
+# --- SAMPLING ENGINE (all methods, unchanged) ---
 class SamplingEngine:
-    # ... (all methods remain exactly as before) ...
     @staticmethod
     def simple_random_sampling(df, percentage):
         n = max(1, int(len(df) * (percentage / 100)))
@@ -457,7 +428,37 @@ class SamplingEngine:
             return df.sample(n=min(n, len(df)), weights=prior, random_state=42)
         return df.sample(n=min(n, len(df)), random_state=42)
 
-# --- UPDATED EXCEL EXPORTER (with TDS limits, Party Analysis changes, and new chart) ---
+# --- DICTIONARY OF SAMPLING METHOD DESCRIPTIONS ---
+SAMPLING_DESCRIPTIONS = {
+    'Simple Random Sampling': 'Every item in the population has an equal chance of being selected. Often done using random numbers.',
+    'Systematic Sampling': 'Select every kth item after a random start. Example: every 10th invoice after a random starting point.',
+    'Stratified Sampling': 'Population divided into strata (e.g., materiality levels), then random samples taken from each stratum proportionally.',
+    'Cluster Sampling': 'Population divided into clusters (e.g., by geography or value groups); randomly select entire clusters and audit all items within them.',
+    'Multistage Sampling': 'Combination of cluster and simple random sampling: first select clusters, then sample within clusters.',
+    'Multiphase Sampling': 'Collect preliminary information from a large sample, then subsample for more detailed audit.',
+    'Area Sampling': 'Similar to cluster sampling but based on geographic areas (e.g., postal codes).',
+    'Probability Proportional to Size (PPS) Sampling': 'Items with larger value have higher probability of selection, focusing on materiality.',
+    'Convenience Sampling': 'Select items that are easiest to access (e.g., first few invoices). Not statistically representative.',
+    'Judgmental Sampling': 'Auditor uses professional judgment to select items (e.g., high-value or high-risk transactions).',
+    'Purposive Sampling': 'Items selected based on specific purpose, such as all critical materiality items.',
+    'Quota Sampling': 'Predefined quotas for different categories are filled (e.g., 10 from each materiality level).',
+    'Snowball Sampling': 'Start with a few items, then ask them to refer other similar items (useful for fraud detection).',
+    'Volunteer Sampling': 'Items are self-selected; rarely used in audit, but can be applied for voluntary disclosures.',
+    'Haphazard Sampling': 'Auditor picks items arbitrarily without any structured method. Not recommended for statistical validity.',
+    'Consecutive Sampling': 'Select a block of consecutive items (e.g., all invoices from a particular week).',
+    'Statistical Sampling': 'Any method that uses probability theory to select samples and evaluate results objectively.',
+    'Non-Statistical Sampling': 'Auditor’s judgment drives selection; results cannot be projected statistically.',
+    'Monetary Unit Sampling (MUS)': 'Also called dollar-unit sampling; each monetary unit has equal chance, giving higher chance to high-value items.',
+    'Block Sampling': 'Select a contiguous block of items (e.g., all transactions in March).',
+    'Sequential Sampling': 'Items are selected in sequence until a stopping rule is met based on error rates.',
+    'Adaptive Sampling': 'Sampling intensity increases in areas where more errors are found.',
+    'Reservoir Sampling': 'Used for streaming data; maintains a random sample without knowing total population size.',
+    'Acceptance Sampling': 'Used to decide whether to accept or reject a population based on sample error rate.',
+    'Bootstrap Sampling': 'Resampling with replacement from the original sample to estimate sampling distribution.',
+    'Bayesian Sampling': 'Combines prior information with sample evidence to update probabilities.'
+}
+
+# --- EXCEL EXPORTER (updated with Sampling Methods sheet) ---
 class ExcelExporter:
     @staticmethod
     def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold, interest_months=3):
@@ -472,7 +473,20 @@ class ExcelExporter:
             comma2_fmt = workbook.add_format({'num_format':'#,##0.00'})
             date_fmt = workbook.add_format({'num_format':'dd-mm-yyyy'})
 
-            # --- 0. TDS Rates Sheet (with Limit column) ---
+            # --- 0. Sampling Methods Explanation Sheet ---
+            method_data = []
+            for method in selected_methods:
+                desc = SAMPLING_DESCRIPTIONS.get(method, 'No description available.')
+                method_data.append([method, desc])
+            method_df = pd.DataFrame(method_data, columns=['Sampling Method', 'Description'])
+            method_df.to_excel(writer, sheet_name='Sampling Methods', index=False, startrow=1, header=False)
+            method_ws = writer.sheets['Sampling Methods']
+            for col_num, col_name in enumerate(method_df.columns):
+                method_ws.write(0, col_num, col_name, header_fmt)
+            method_ws.set_column('A:A', 30)
+            method_ws.set_column('B:B', 80)
+
+            # --- 1. TDS Rates Sheet (with Limit column) ---
             tds_rates_df = pd.DataFrame(TDS_RATES_DATA[1:], columns=TDS_RATES_DATA[0])
             tds_rates_df.to_excel(writer, sheet_name='TDS Rates', index=False, startrow=1, header=False)
             tds_ws = writer.sheets['TDS Rates']
@@ -483,7 +497,7 @@ class ExcelExporter:
             tds_ws.set_column('C:C', 15, percent_fmt)   # Rate
             tds_ws.set_column('D:D', 15, comma_fmt)     # Limit
 
-            # --- 1. Complete Data (raw uploaded columns only) ---
+            # --- 2. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
             df_raw = df[raw_cols].copy()
             df_raw['Date'] = pd.to_datetime(df_raw['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
@@ -501,7 +515,7 @@ class ExcelExporter:
             ws_raw.set_column(2, 2, 20)   # Invoice no
             ws_raw.set_column(3, 9, 15, money_fmt)
 
-            # --- 2. Executive Summary (updated with new chart at A20:B29) ---
+            # --- 3. Executive Summary (with new chart at A20:B29) ---
             ws_summ = workbook.add_worksheet('Executive Summary')
             ws_summ.write(0, 0, 'Metric', header_fmt)
             ws_summ.write(0, 1, 'Value', header_fmt)
@@ -542,9 +556,7 @@ class ExcelExporter:
             ws_summ.write(16, 0, 'Chart Explanation:')
             ws_summ.write(16, 1, 'Bar chart shows top 10 parties by TDS deducted (from Analysis sheet).')
 
-            # Top 10 parties by TDS deducted (from Analysis sheet, where TDS deducted reflects applicability)
-            # We'll compute using Python and write static values at A20:B29
-            # Use the full df (which has TDS Applicable flag) to get TDS deducted per party
+            # Top 10 parties by TDS deducted
             party_tds = df.groupby('Party name')['TDS deducted'].sum().nlargest(10).reset_index()
             ws_summ.write(19, 0, 'Party Name', header_fmt)
             ws_summ.write(19, 1, 'TDS Deducted', header_fmt)
@@ -568,7 +580,7 @@ class ExcelExporter:
             ws_summ.set_column('A:A', 30)
             ws_summ.set_column('B:B', 40)
 
-            # --- 3. Sample Data (with formulas incorporating TDS limit) ---
+            # --- 4. Sample Data (with formulas incorporating TDS limit) ---
             sample_df_out = sample_df.copy()
             if 'Date' in sample_df_out.columns:
                 sample_df_out['Date'] = pd.to_datetime(sample_df_out['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
@@ -653,7 +665,7 @@ class ExcelExporter:
                 else:
                     sample_ws.set_column(col_num, col_num, 15)
 
-            # --- 4. Analysis Sheet (same formulas as Sample Data) ---
+            # --- 5. Analysis Sheet (same formulas as Sample Data) ---
             analysis_df = df.copy()
             if 'Date' in analysis_df.columns:
                 analysis_df['Date'] = pd.to_datetime(analysis_df['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
@@ -719,13 +731,18 @@ class ExcelExporter:
                 else:
                     analysis_ws.set_column(col_num, col_num, 15)
 
-            # --- 5. Party Analysis (updated: new column "Applicable Limit", formulas reference Analysis sheet) ---
+            # --- 6. Party Analysis (updated: new column "Applicable Limit", formulas reference Analysis sheet) ---
             # Compute per-party mode TDS section and its limit
             party_mode_section = df.groupby('Party name')['TDS Section'].agg(lambda x: x.mode()[0] if not x.mode().empty else '194C').to_dict()
             party_limit = {party: tds_limit_dict.get(section, 0) for party, section in party_mode_section.items()}
+            # Ensure limits are numeric
+            for k, v in party_limit.items():
+                try:
+                    party_limit[k] = float(v) if v != 'Basic exemption limit' else 0
+                except:
+                    party_limit[k] = 0
 
-            # Build party summary using Analysis sheet aggregates (but we'll write static values for some columns)
-            # We'll create a DataFrame with Party Name, Taxable Value (total), Applicable Limit, TDS Deducted, Required TDS, etc.
+            # Build party summary
             party_agg = df.groupby('Party name').agg({
                 'taxable value': 'sum',
                 'TDS deducted': 'sum',
@@ -734,8 +751,8 @@ class ExcelExporter:
             party_agg['Applicable Limit'] = party_agg['Party name'].map(party_limit)
             party_agg['Rate (decimal)'] = (party_agg['Required TDS'] / party_agg['taxable value']).fillna(0)
             party_agg['TDS Applicability'] = party_agg['Required TDS'].apply(lambda x: 'Yes' if x > 0 else 'No')
-            party_agg['If Yes, How much to be deducted'] = 0.0  # will be formula
-            party_agg['Shortfall/Excess'] = 0.0                 # will be formula
+            party_agg['If Yes, How much to be deducted'] = 0.0
+            party_agg['Shortfall/Excess'] = 0.0
             party_agg['Remarks'] = ''
 
             party_final = party_agg[['Party name', 'taxable value', 'Applicable Limit', 'TDS deducted', 'TDS Applicability', 'Rate (decimal)',
@@ -755,39 +772,34 @@ class ExcelExporter:
 
             # Subtotal row at row 0
             party_ws.write(0, 0, 'Total')
-            # Sum formulas for numeric columns (Taxable Value col B, Applicable Limit col C, TDS Deducted col D, If Yes col G, Shortfall col H)
             numeric_cols_party = [1, 2, 3, 6, 7]  # 0-based indices
             for col_num in numeric_cols_party:
                 col_letter = chr(65 + col_num)
                 formula = f'=SUM({col_letter}3:{col_letter}50000)'
                 party_ws.write(0, col_num, formula, money_fmt)
 
-            # Write formulas for data rows (starting row 3)
-            # We'll use SUMIF on Analysis sheet for Taxable Value, TDS Deducted, Required TDS.
-            # Get column letters for Analysis sheet: assume Taxable Value is col E, TDS Deducted col I, Required TDS col ? (let's find index)
-            # We need to know the column index of 'Required TDS' in Analysis sheet. We can get from a_col_indices.
+            # Get column letter for Required TDS in Analysis sheet
             req_tds_col_idx = a_col_indices.get('Required TDS', None)
             if req_tds_col_idx is None:
-                # fallback
-                req_tds_col_idx = a_col_indices.get('Required TDS', 17)  # approximate
+                req_tds_col_idx = a_col_indices.get('Required TDS', 17)  # fallback
+            req_tds_col_letter = chr(65 + req_tds_col_idx)
 
             for row in range(2, len(party_final) + 2):
                 party_name_cell = f'A{row+1}'
                 # Taxable Value from Analysis sheet
                 party_ws.write_formula(row, 1, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!E:E)', money_fmt)
-                # Applicable Limit is static (already written from Python)
+                # Applicable Limit is static
                 # TDS Deducted from Analysis sheet
                 party_ws.write_formula(row, 3, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!I:I)', money_fmt)
-                # TDS Applicability: =IF(SUMIF('Analysis'!B:B, A3, 'Analysis'!Required_TDS_col) > 0, "Yes", "No")
-                req_tds_col_letter = chr(65 + req_tds_col_idx)
+                # TDS Applicability
                 party_ws.write_formula(row, 4, f'=IF(SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter}) > 0, "Yes", "No")')
-                # Rate (decimal): =SUMIF('Analysis'!B:B, A3, 'Analysis'!Required_TDS_col) / SUMIF('Analysis'!B:B, A3, 'Analysis'!E:E)
+                # Rate (decimal)
                 party_ws.write_formula(row, 5, f'=IFERROR(SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter}) / SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!E:E), 0)', percent_fmt)
-                # If Yes, How much to be deducted: =SUMIF('Analysis'!B:B, A3, 'Analysis'!Required_TDS_col)
+                # If Yes amount
                 party_ws.write_formula(row, 6, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})', money_fmt)
-                # Shortfall/Excess: =SUMIF('Analysis'!B:B, A3, 'Analysis'!I:I) - SUMIF('Analysis'!B:B, A3, 'Analysis'!Required_TDS_col)
+                # Shortfall/Excess
                 party_ws.write_formula(row, 7, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!I:I) - SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})', money_fmt)
-                # Remarks: =IF(G3>=0, "Compliant", "Not Compliant")  // G3 is If Yes col
+                # Remarks
                 party_ws.write_formula(row, 8, f'=IF(G{row+1}>=0, "Compliant", "Not Compliant")')
 
             party_ws.set_column(0, 0, 30)   # Party Name
@@ -820,7 +832,7 @@ class ExcelExporter:
 
         return output.getvalue()
 
-# --- PARTY DASHBOARD (updated to use new TDS applicability) ---
+# --- PARTY DASHBOARD ---
 def create_party_dashboard(df):
     party_stats = df.groupby('Party name').agg({
         'taxable value': ['sum','count','mean'],
@@ -835,7 +847,7 @@ def create_party_dashboard(df):
     party_stats['Risk Score'] = (100 - party_stats['TDS Compliance %']).round(2)
     return party_stats.sort_values('Total Value', ascending=False)
 
-# --- MAIN APP (updated to pass interest_months to DataProcessor) ---
+# --- MAIN APP ---
 def main():
     with st.sidebar:
         st.markdown('<div style="background: rgba(0,255,135,0.1); padding:20px; border-radius:20px; border:1px solid #00ff87;"><h3 style="color:#00ff87;">⚡ CONTROL PANEL</h3></div>', unsafe_allow_html=True)
@@ -896,7 +908,7 @@ def main():
             mat_engine = MaterialityEngine(materiality_threshold)
             df, total_value, materiality_amount = mat_engine.calculate(df)
 
-            # Sampling (unchanged)
+            # Sampling
             sampling_engine = SamplingEngine()
             method_map = {
                 'Simple Random Sampling': sampling_engine.simple_random_sampling,
@@ -1044,6 +1056,7 @@ def main():
                     <ul>
                         <li>📊 Executive Summary with Top 10 Parties by TDS Deducted chart (A20:B29)</li>
                         <li>📑 TDS Rates sheet with Limit column</li>
+                        <li>📑 Sampling Methods sheet explaining each selected method</li>
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
                         <li>🔍 Sample Data with formulas incorporating TDS limit checks</li>
                         <li>📊 Analysis Sheet (full data with same formulas)</li>
@@ -1057,7 +1070,7 @@ def main():
                         exporter = ExcelExporter()
                         excel_data = exporter.export_with_charts(df, combined_sample, party_stats, selected_methods, materiality_threshold, interest_months)
                         st.download_button('📥 DOWNLOAD EXCEL REPORT (WITH FORMULAS)', data=excel_data, file_name=f'Ultra_Audit_Report_{datetime.now():%Y%m%d_%H%M%S}.xlsx', use_container_width=True)
-                        st.success('✅ Report generated successfully with TDS limits integrated!')
+                        st.success('✅ Report generated successfully with TDS limits and sampling explanations integrated!')
         except Exception as e:
             st.error(f'Error: {str(e)}')
             st.exception(e)
