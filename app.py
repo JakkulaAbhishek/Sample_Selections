@@ -520,10 +520,22 @@ class ExcelExporter:
             tds_ws = writer.sheets['TDS Rates']
             for col_num, col_name in enumerate(tds_rates_df.columns):
                 tds_ws.write(0, col_num, col_name, header_fmt)
+            # Set column formats: Rate as percentage, Limit as number (if numeric) or text
             tds_ws.set_column('A:A', 25)   # Section
             tds_ws.set_column('B:B', 60)   # Explanation
-            tds_ws.set_column('C:C', 15, percent_fmt)   # Rate
-            tds_ws.set_column('D:D', 15, comma_fmt)     # Limit
+            tds_ws.set_column('C:C', 15, percent_fmt)   # Rate formatted as %
+            # For Limit column, we'll set a general format, but later we will apply numeric formatting only to rows with numeric limits
+            tds_ws.set_column('D:D', 15)   # Limit (format applied per cell later)
+            # Apply numeric format to Limit column cells where value is numeric
+            for row_num in range(2, len(tds_rates_df)+2):
+                limit_val = tds_rates_df.iloc[row_num-2, 3]
+                try:
+                    # Try to convert to float; if successful, it's numeric
+                    float(limit_val)
+                    tds_ws.write(row_num, 3, limit_val, comma_fmt)
+                except:
+                    # Non-numeric (e.g., 'Basic exemption limit'), write as string
+                    tds_ws.write(row_num, 3, limit_val)
 
             # --- 2. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
@@ -582,7 +594,7 @@ class ExcelExporter:
             ws_summ.write(13, 1, len(df[df['Materiality Level']=='🌟 LOW']), comma_fmt)
             ws_summ.write(14, 1, ', '.join(selected_methods))
             ws_summ.write(16, 0, 'Chart Explanation:')
-            ws_summ.write(16, 1, 'Pie chart shows sample composition by Materiality Level.')
+            ws_summ.write(16, 1, 'Pie chart shows the composition of the sample by Materiality Level, illustrating the proportion of critical, high, medium, low, and immaterial items selected. This helps auditors assess the risk coverage of the sample.')
             ws_summ.set_column('A:A', 30)
             ws_summ.set_column('B:B', 40)
 
@@ -793,7 +805,7 @@ class ExcelExporter:
                 else:
                     analysis_ws.set_column(col_num, col_num, 15)
 
-            # --- 6. Party Analysis (with additional 194C columns) ---
+            # --- 6. Party Analysis (with additional 194C columns and invoice-level breakdown) ---
             # Compute per-party mode TDS section and its limit (static values from Python)
             party_mode_section = df.groupby('Party name')['TDS Section'].agg(lambda x: x.mode()[0] if not x.mode().empty else '194C').to_dict()
             party_limit = {party: tds_limit_dict.get(section, 0) for party, section in party_mode_section.items()}
@@ -901,6 +913,34 @@ class ExcelExporter:
             party_ws.set_column(10, 10, 15, comma_fmt) # 194C Invoices >30k
             party_ws.set_column(11, 11, 20)            # 194C Special Applicable
             party_ws.set_column(12, 12, 15, money_fmt) # 194C TDS Required
+
+            # --- INVOICE-LEVEL BREAKDOWN for 194C (invoices >30k, party total <100k) starting from row 19 ---
+            # Identify parties with 194C total < 100,000
+            parties_low_194C = party_194C[party_194C['total_194C'] < 100000]['Party name'].tolist()
+            # Filter invoices: section 194C, taxable value > 30000, party in low_194C list
+            inv_breakdown = df[(df['TDS Section'] == '194C') & (df['taxable value'] > 30000) & (df['Party name'].isin(parties_low_194C))]
+            if not inv_breakdown.empty:
+                # Select relevant columns for breakdown
+                inv_breakdown = inv_breakdown[['Date', 'Party name', 'Invoice no', 'taxable value', 'TDS deducted', 'Required TDS', 'TDS Section', 'Materiality Level']].copy()
+                inv_breakdown['Date'] = pd.to_datetime(inv_breakdown['Date'], errors='coerce').dt.strftime('%d-%m-%Y')
+                # Determine start row: after party summary (len(party_final)+2 rows used for data, plus 1 header row = len(party_final)+3 rows used; we want to start at row 19 or after a blank row)
+                # Let's start at row max(19, len(party_final)+5) to leave a gap.
+                start_row = max(19, len(party_final) + 5)
+                breakdown_headers = ['Date', 'Party Name', 'Invoice No', 'Taxable Value', 'TDS Deducted', 'Required TDS', 'TDS Section', 'Materiality Level']
+                for col_num, header in enumerate(breakdown_headers):
+                    party_ws.write(start_row - 1, col_num, header, header_fmt)  # header at start_row-1 (since 0-index)
+                for i, (_, row) in enumerate(inv_breakdown.iterrows()):
+                    excel_row = start_row + i
+                    party_ws.write(excel_row, 0, row['Date'], date_fmt)
+                    party_ws.write(excel_row, 1, row['Party name'])
+                    party_ws.write(excel_row, 2, row['Invoice no'])
+                    party_ws.write(excel_row, 3, row['taxable value'], money_fmt)
+                    party_ws.write(excel_row, 4, row['TDS deducted'], money_fmt)
+                    party_ws.write(excel_row, 5, row['Required TDS'], money_fmt)
+                    party_ws.write(excel_row, 6, row['TDS Section'])
+                    party_ws.write(excel_row, 7, row['Materiality Level'])
+                # Optionally add a note above the breakdown
+                party_ws.write(start_row - 2, 0, "Invoice-level breakdown for 194C (taxable value > 30,000 and party total < 100,000):")
 
             # --- Add pie chart to Executive Summary ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
@@ -1150,7 +1190,7 @@ def main():
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
                         <li>🔍 Sample Data with formulas incorporating party‑section total</li>
                         <li>📊 Analysis Sheet with dynamic formulas for Party_Section_Total and TDS Applicable</li>
-                        <li>🏢 Party Analysis with 194C-specific columns and TDS Required formula</li>
+                        <li>🏢 Party Analysis with 194C-specific columns and TDS Required formula, plus invoice-level breakdown for 194C cases where party total <100k and invoice >30k</li>
                         <li>➕ Subtotals row on all data sheets</li>
                     </ul>
                 </div>
