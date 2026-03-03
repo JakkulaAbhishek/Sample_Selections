@@ -824,8 +824,13 @@ class ExcelExporter:
             ).reset_index()
             party_194C['194C Special Applicable'] = ((party_194C['total_194C'] < 100000) & (party_194C['invoices_over_30k'] > 0)).map({True: 'Yes', False: 'No'})
 
-            # Merge with party_agg
+            # Add 194C TDS Required column (sum of Required TDS for 194C)
+            party_194C_tds = df[df['TDS Section'] == '194C'].groupby('Party name')['Required TDS'].sum().reset_index()
+            party_194C_tds.rename(columns={'Required TDS': '194C TDS Required'}, inplace=True)
+
+            # Merge all party-level data
             party_final = party_agg.merge(party_194C, on='Party name', how='left')
+            party_final = party_final.merge(party_194C_tds, on='Party name', how='left')
             # Rename columns for output
             party_final.rename(columns={
                 'Party name': 'Party Name',
@@ -836,10 +841,10 @@ class ExcelExporter:
                 '194C Special Applicable': '194C Special Applicable'
             }, inplace=True)
 
-            # Reorder columns: keep original columns plus new ones at the end
+            # Reorder columns: original base columns, then 194C summary, then new TDS Required
             base_cols = ['Party Name', 'Taxable Value', 'Applicable Limit', 'TDS Deducted', 'TDS Applicability', 'Rate (decimal)',
                          'If Yes, How much to be deducted', 'Shortfall/Excess', 'Remarks']
-            new_cols = ['194C Total', '194C Invoices >30k', '194C Special Applicable']
+            new_cols = ['194C Total', '194C Invoices >30k', '194C Special Applicable', '194C TDS Required']
             party_final = party_final[base_cols + new_cols]
 
             party_final.to_excel(writer, sheet_name='Party Analysis', index=False, startrow=2, header=False)
@@ -850,7 +855,7 @@ class ExcelExporter:
 
             # Subtotal row at row 0
             party_ws.write(0, 0, 'Total')
-            numeric_cols_party = [1, 2, 3, 6, 7]  # 0-based indices: Taxable Value, Applicable Limit, TDS Deducted, If Yes, Shortfall/Excess
+            numeric_cols_party = [1, 2, 3, 6, 7, 12]  # Indices of numeric columns: Taxable Value, Applicable Limit, TDS Deducted, If Yes, Shortfall/Excess, 194C TDS Required
             for col_num in numeric_cols_party:
                 col_letter = chr(65 + col_num)
                 formula = f'=SUM({col_letter}3:{col_letter}50000)'
@@ -869,17 +874,20 @@ class ExcelExporter:
                 # Applicable Limit is static
                 # TDS Deducted from Analysis sheet
                 party_ws.write_formula(row, 3, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!I:I)', money_fmt)
-                # TDS Applicability
+                # TDS Applicability (based on Required TDS > 0)
                 party_ws.write_formula(row, 4, f'=IF(SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter}) > 0, "Yes", "No")')
                 # Rate (decimal)
                 party_ws.write_formula(row, 5, f'=IFERROR(SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter}) / SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!E:E), 0)', percent_fmt)
-                # If Yes amount
+                # If Yes amount (Required TDS)
                 party_ws.write_formula(row, 6, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})', money_fmt)
-                # Shortfall/Excess
+                # Shortfall/Excess (TDS Deducted - Required TDS)
                 party_ws.write_formula(row, 7, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!I:I) - SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})', money_fmt)
-                # Remarks
-                party_ws.write_formula(row, 8, f'=IF(G{row+1}>=0, "Compliant", "Not Compliant")')
+                # Remarks: Compliant if Shortfall/Excess >= 0
+                party_ws.write_formula(row, 8, f'=IF(H{row+1}>=0, "Compliant", "Not Compliant")')
+                # 194C TDS Required (sum of Required TDS for section 194C)
+                party_ws.write_formula(row, 12, f'=SUMIFS(\'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter}, \'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!J:J, "194C")', money_fmt)
 
+            # Set column widths
             party_ws.set_column(0, 0, 30)   # Party Name
             party_ws.set_column(1, 1, 15, money_fmt)   # Taxable Value
             party_ws.set_column(2, 2, 15, comma_fmt)   # Applicable Limit
@@ -892,6 +900,7 @@ class ExcelExporter:
             party_ws.set_column(9, 9, 15, money_fmt)   # 194C Total
             party_ws.set_column(10, 10, 15, comma_fmt) # 194C Invoices >30k
             party_ws.set_column(11, 11, 20)            # 194C Special Applicable
+            party_ws.set_column(12, 12, 15, money_fmt) # 194C TDS Required
 
             # --- Add pie chart to Executive Summary ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
@@ -1141,7 +1150,7 @@ def main():
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
                         <li>🔍 Sample Data with formulas incorporating party‑section total</li>
                         <li>📊 Analysis Sheet with dynamic formulas for Party_Section_Total and TDS Applicable</li>
-                        <li>🏢 Party Analysis with 194C-specific columns</li>
+                        <li>🏢 Party Analysis with 194C-specific columns and TDS Required formula</li>
                         <li>➕ Subtotals row on all data sheets</li>
                     </ul>
                 </div>
