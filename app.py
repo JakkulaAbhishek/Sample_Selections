@@ -447,34 +447,34 @@ class SamplingEngine:
             return df.sample(n=min(n, len(df)), weights=prior, random_state=42)
         return df.sample(n=min(n, len(df)), random_state=42)
 
-# --- DICTIONARY OF SAMPLING METHOD DESCRIPTIONS ---
+# --- DICTIONARY OF SAMPLING METHOD DESCRIPTIONS (with examples) ---
 SAMPLING_DESCRIPTIONS = {
-    'Simple Random Sampling': 'Every item in the population has an equal chance of being selected. Often done using random numbers.',
-    'Systematic Sampling': 'Select every kth item after a random start. Example: every 10th invoice after a random starting point.',
-    'Stratified Sampling': 'Population divided into strata (e.g., materiality levels), then random samples taken from each stratum proportionally.',
-    'Cluster Sampling': 'Population divided into clusters (e.g., by geography or value groups); randomly select entire clusters and audit all items within them.',
-    'Multistage Sampling': 'Combination of cluster and simple random sampling: first select clusters, then sample within clusters.',
-    'Multiphase Sampling': 'Collect preliminary information from a large sample, then subsample for more detailed audit.',
-    'Area Sampling': 'Similar to cluster sampling but based on geographic areas (e.g., postal codes).',
-    'Probability Proportional to Size (PPS) Sampling': 'Items with larger value have higher probability of selection, focusing on materiality.',
-    'Convenience Sampling': 'Select items that are easiest to access (e.g., first few invoices). Not statistically representative.',
-    'Judgmental Sampling': 'Auditor uses professional judgment to select items (e.g., high-value or high-risk transactions).',
-    'Purposive Sampling': 'Items selected based on specific purpose, such as all critical materiality items.',
-    'Quota Sampling': 'Predefined quotas for different categories are filled (e.g., 10 from each materiality level).',
-    'Snowball Sampling': 'Start with a few items, then ask them to refer other similar items (useful for fraud detection).',
-    'Volunteer Sampling': 'Items are self-selected; rarely used in audit, but can be applied for voluntary disclosures.',
-    'Haphazard Sampling': 'Auditor picks items arbitrarily without any structured method. Not recommended for statistical validity.',
-    'Consecutive Sampling': 'Select a block of consecutive items (e.g., all invoices from a particular week).',
-    'Statistical Sampling': 'Any method that uses probability theory to select samples and evaluate results objectively.',
-    'Non-Statistical Sampling': 'Auditor’s judgment drives selection; results cannot be projected statistically.',
-    'Monetary Unit Sampling (MUS)': 'Also called dollar-unit sampling; each monetary unit has equal chance, giving higher chance to high-value items.',
-    'Block Sampling': 'Select a contiguous block of items (e.g., all transactions in March).',
-    'Sequential Sampling': 'Items are selected in sequence until a stopping rule is met based on error rates.',
-    'Adaptive Sampling': 'Sampling intensity increases in areas where more errors are found.',
-    'Reservoir Sampling': 'Used for streaming data; maintains a random sample without knowing total population size.',
-    'Acceptance Sampling': 'Used to decide whether to accept or reject a population based on sample error rate.',
-    'Bootstrap Sampling': 'Resampling with replacement from the original sample to estimate sampling distribution.',
-    'Bayesian Sampling': 'Combines prior information with sample evidence to update probabilities.'
+    'Simple Random Sampling': 'Every item in the population has an equal chance of being selected. Often done using random numbers.\n\nExample: Assign a random number to each invoice and select the first 50 with the smallest random numbers.',
+    'Systematic Sampling': 'Select every kth item after a random start. Example: every 10th invoice after a random starting point.\n\nExample: Sort by date, pick a random start between 1 and 10, then take every 10th invoice thereafter.',
+    'Stratified Sampling': 'Population divided into strata (e.g., materiality levels), then random samples taken from each stratum proportionally.\n\nExample: Divide invoices into "High Value", "Medium Value", "Low Value" groups and take 10% from each group.',
+    'Cluster Sampling': 'Population divided into clusters (e.g., by geography or value groups); randomly select entire clusters and audit all items within them.\n\nExample: All invoices from 3 randomly selected branches (clusters) are audited fully.',
+    'Multistage Sampling': 'Combination of cluster and simple random sampling: first select clusters, then sample within clusters.\n\nExample: Select 5 branches, then within each branch select 20 invoices at random.',
+    'Multiphase Sampling': 'Collect preliminary information from a large sample, then subsample for more detailed audit.\n\nExample: First select 500 invoices to check for presence of supporting documents, then among those with issues, select 50 for deeper review.',
+    'Area Sampling': 'Similar to cluster sampling but based on geographic areas (e.g., postal codes).\n\nExample: Group invoices by city, then randomly select 3 cities and audit all invoices from those cities.',
+    'Probability Proportional to Size (PPS) Sampling': 'Items with larger value have higher probability of selection, focusing on materiality.\n\nExample: Larger invoices are more likely to be selected, ensuring material items are represented.',
+    'Convenience Sampling': 'Select items that are easiest to access (e.g., first few invoices). Not statistically representative.\n\nExample: Auditing the first 50 invoices in the binder because they are easiest to pull.',
+    'Judgmental Sampling': 'Auditor uses professional judgment to select items (e.g., high-value or high-risk transactions).\n\nExample: Select all invoices > ₹10,00,000 and all related party transactions.',
+    'Purposive Sampling': 'Items selected based on specific purpose, such as all critical materiality items.\n\nExample: Include every transaction flagged as "Critical" in materiality analysis.',
+    'Quota Sampling': 'Predefined quotas for different categories are filled (e.g., 10 from each materiality level).\n\nExample: Ensure the sample includes 5 critical, 10 high, 15 medium, and 20 low materiality items.',
+    'Snowball Sampling': 'Start with a few items, then ask them to refer other similar items (useful for fraud detection).\n\nExample: Start with one suspicious vendor, then check all invoices from that vendor, then all vendors that share the same address.',
+    'Volunteer Sampling': 'Items are self-selected; rarely used in audit, but can be applied for voluntary disclosures.\n\nExample: Request departments to voluntarily submit high-risk transactions for review.',
+    'Haphazard Sampling': 'Auditor picks items arbitrarily without any structured method. Not recommended for statistical validity.\n\nExample: Randomly flipping through the file and pointing to invoices without a formal random process.',
+    'Consecutive Sampling': 'Select a block of consecutive items (e.g., all invoices from a particular week).\n\nExample: Take all invoices from the last week of March.',
+    'Statistical Sampling': 'Any method that uses probability theory to select samples and evaluate results objectively.\n\nExample: Simple random sampling with a defined confidence level and tolerable error rate.',
+    'Non-Statistical Sampling': 'Auditor’s judgment drives selection; results cannot be projected statistically.\n\nExample: Judgmental sampling based on risk assessment.',
+    'Monetary Unit Sampling (MUS)': 'Also called dollar-unit sampling; each monetary unit has equal chance, giving higher chance to high-value items.\n\nExample: Each rupee in the population has an equal chance; select items based on cumulative totals.',
+    'Block Sampling': 'Select a contiguous block of items (e.g., all transactions in March).\n\nExample: All invoices issued in the month of April.',
+    'Sequential Sampling': 'Items are selected in sequence until a stopping rule is met based on error rates.\n\nExample: Select invoices one by one until the total error found exceeds a threshold.',
+    'Adaptive Sampling': 'Sampling intensity increases in areas where more errors are found.\n\nExample: If a certain department shows many errors, sample more items from that department.',
+    'Reservoir Sampling': 'Used for streaming data; maintains a random sample without knowing total population size.\n\nExample: While processing invoices as they arrive, maintain a random sample of 100 without needing to know total count.',
+    'Acceptance Sampling': 'Used to decide whether to accept or reject a population based on sample error rate.\n\nExample: If the sample error rate exceeds 2%, reject the entire batch for further scrutiny.',
+    'Bootstrap Sampling': 'Resampling with replacement from the original sample to estimate sampling distribution.\n\nExample: Take many random subsamples (with replacement) from the original sample to estimate variability.',
+    'Bayesian Sampling': 'Combines prior information with sample evidence to update probabilities.\n\nExample: Use prior audit findings to adjust the probability of selecting high-risk items.'
 }
 
 # --- EXCEL EXPORTER (updated with party-section total formulas and new 194C columns) ---
@@ -514,28 +514,42 @@ class ExcelExporter:
             method_ws.set_column('A:A', 30)
             method_ws.set_column('B:B', 80)
 
-            # --- 1. TDS Rates Sheet (with Limit column) ---
+            # --- 1. TDS Rates Sheet (with Limit column and note) ---
             tds_rates_df = pd.DataFrame(TDS_RATES_DATA[1:], columns=TDS_RATES_DATA[0])
-            tds_rates_df.to_excel(writer, sheet_name='TDS Rates', index=False, startrow=1, header=False)
+            tds_rates_df.to_excel(writer, sheet_name='TDS Rates', index=False, startrow=2, header=False)  # start at row 2 to leave row for note
             tds_ws = writer.sheets['TDS Rates']
+            # Write note at top
+            tds_ws.write(0, 0, 'Note: Non-numeric limits (e.g., "Basic exemption limit") are not numeric thresholds and are excluded from TDS applicability calculations.', header_fmt)
+            tds_ws.write(1, 0, 'Section', header_fmt)
+            tds_ws.write(1, 1, 'Explanation', header_fmt)
+            tds_ws.write(1, 2, 'Rate', header_fmt)
+            tds_ws.write(1, 3, 'Limit', header_fmt)
             for col_num, col_name in enumerate(tds_rates_df.columns):
-                tds_ws.write(0, col_num, col_name, header_fmt)
-            # Set column formats: Rate as percentage, Limit as number (if numeric) or text
-            tds_ws.set_column('A:A', 25)   # Section
-            tds_ws.set_column('B:B', 60)   # Explanation
-            tds_ws.set_column('C:C', 15, percent_fmt)   # Rate formatted as %
-            # For Limit column, we'll set a general format, but later we will apply numeric formatting only to rows with numeric limits
-            tds_ws.set_column('D:D', 15)   # Limit (format applied per cell later)
-            # Apply numeric format to Limit column cells where value is numeric
-            for row_num in range(2, len(tds_rates_df)+2):
-                limit_val = tds_rates_df.iloc[row_num-2, 3]
+                # Already written header above manually, but we still write column headers for formatting consistency
+                pass
+            # Write data rows starting at row 2
+            for i, row in tds_rates_df.iterrows():
+                row_num = i + 2
+                tds_ws.write(row_num, 0, row['Section'])
+                tds_ws.write(row_num, 1, row['Explanation'])
+                # Rate: format as percentage
+                rate_str = row['Rate']
                 try:
-                    # Try to convert to float; if successful, it's numeric
-                    float(limit_val)
-                    tds_ws.write(row_num, 3, limit_val, comma_fmt)
+                    rate_val = float(rate_str.replace('%', '')) / 100
+                    tds_ws.write(row_num, 2, rate_val, percent_fmt)
                 except:
-                    # Non-numeric (e.g., 'Basic exemption limit'), write as string
+                    tds_ws.write(row_num, 2, rate_str)
+                # Limit: try to convert to number, else write as string
+                limit_val = row['Limit']
+                try:
+                    limit_num = float(limit_val)
+                    tds_ws.write(row_num, 3, limit_num, comma_fmt)
+                except:
                     tds_ws.write(row_num, 3, limit_val)
+            tds_ws.set_column('A:A', 25)
+            tds_ws.set_column('B:B', 60)
+            tds_ws.set_column('C:C', 15, percent_fmt)
+            tds_ws.set_column('D:D', 15)
 
             # --- 2. Complete Data (raw uploaded columns only) ---
             raw_cols = ['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section']
@@ -650,7 +664,7 @@ class ExcelExporter:
 
                 # Std TDS Rate % (just rate from TDS Rates)
                 if std_tds_rate_col is not None:
-                    std_formula = f"=IFERROR(VLOOKUP({chr(65+tds_section_col)}{row+1},'TDS Rates'!$A$2:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
+                    std_formula = f"=IFERROR(VLOOKUP({chr(65+tds_section_col)}{row+1},'TDS Rates'!$A$3:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
                     sample_ws.write_formula(row, std_tds_rate_col, std_formula, percent_fmt)
 
                 # Applied TDS Rate %
@@ -664,8 +678,8 @@ class ExcelExporter:
                     party_cell = f'{chr(65+col_indices["Party name"])}{row+1}'
                     section_cell = f'{chr(65+tds_section_col)}{row+1}'
                     sumifs = f"SUMIFS('Analysis'!{analysis_taxable_col}:{analysis_taxable_col}, 'Analysis'!{analysis_party_col}:{analysis_party_col}, {party_cell}, 'Analysis'!{analysis_section_col}:{analysis_section_col}, {section_cell})"
-                    limit_vlookup = f"VLOOKUP({section_cell},'TDS Rates'!$A$2:$D$100,4,FALSE)"
-                    rate_vlookup = f"VLOOKUP({section_cell},'TDS Rates'!$A$2:$C$100,3,FALSE)"
+                    limit_vlookup = f"VLOOKUP({section_cell},'TDS Rates'!$A$3:$D$100,4,FALSE)"
+                    rate_vlookup = f"VLOOKUP({section_cell},'TDS Rates'!$A$3:$C$100,3,FALSE)"
                     required_formula = f"=IF({sumifs}>{limit_vlookup}, {chr(65+taxable_col)}{row+1}*{rate_vlookup}, 0)"
                     sample_ws.write_formula(row, required_tds_col, required_formula, money_fmt)
 
@@ -750,7 +764,7 @@ class ExcelExporter:
 
                 # Std TDS Rate % (just rate from TDS Rates)
                 if a_std_rate is not None:
-                    std_formula = f"=IFERROR(VLOOKUP({col_letter(a_tds_section)}{row+1},'TDS Rates'!$A$2:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
+                    std_formula = f"=IFERROR(VLOOKUP({col_letter(a_tds_section)}{row+1},'TDS Rates'!$A$3:$C$100,3,FALSE),\"Please Enter TDS Section rate as per TDS rates sheet\")"
                     analysis_ws.write_formula(row, a_std_rate, std_formula, percent_fmt)
 
                 # Applied TDS Rate %
@@ -771,7 +785,7 @@ class ExcelExporter:
                 # TDS Applicable (with 194C special rule)
                 if a_tds_applicable is not None and a_party_section_total is not None:
                     ps_col_letter = col_letter(a_party_section_total)
-                    limit_vlookup = f'VLOOKUP({col_letter(a_tds_section)}{row+1},\'TDS Rates\'!$A$2:$D$100,4,FALSE)'
+                    limit_vlookup = f'VLOOKUP({col_letter(a_tds_section)}{row+1},\'TDS Rates\'!$A$3:$D$100,4,FALSE)'
                     # Formula: IF(AND(section="194C", Party_Section_Total<100000), taxable value > 30000, Party_Section_Total > limit)
                     applicable_formula = f'=IF(AND({col_letter(a_tds_section)}{row+1}="194C", {ps_col_letter}{row+1}<100000), {col_letter(a_taxable)}{row+1}>30000, {ps_col_letter}{row+1} > {limit_vlookup})'
                     analysis_ws.write_formula(row, a_tds_applicable, applicable_formula)
@@ -779,7 +793,7 @@ class ExcelExporter:
                 # Required TDS: now uses TDS Applicable column
                 if a_required is not None and a_tds_applicable is not None:
                     tds_applicable_col_letter = col_letter(a_tds_applicable)
-                    rate_vlookup = f'VLOOKUP({col_letter(a_tds_section)}{row+1},\'TDS Rates\'!$A$2:$C$100,3,FALSE)'
+                    rate_vlookup = f'VLOOKUP({col_letter(a_tds_section)}{row+1},\'TDS Rates\'!$A$3:$C$100,3,FALSE)'
                     required_formula = f'=IF({tds_applicable_col_letter}{row+1}, {col_letter(a_taxable)}{row+1}*{rate_vlookup}, 0)'
                     analysis_ws.write_formula(row, a_required, required_formula, money_fmt)
 
@@ -926,6 +940,8 @@ class ExcelExporter:
                 # Determine start row: after party summary (len(party_final)+2 rows used for data, plus 1 header row = len(party_final)+3 rows used; we want to start at row 19 or after a blank row)
                 # Let's start at row max(19, len(party_final)+5) to leave a gap.
                 start_row = max(19, len(party_final) + 5)
+                # Add header note
+                party_ws.write(start_row - 2, 0, "194C Detailed Invoices (Party total < 100,000 and Invoice > 30,000):")
                 breakdown_headers = ['Date', 'Party Name', 'Invoice No', 'Taxable Value', 'TDS Deducted', 'Required TDS', 'TDS Section', 'Materiality Level']
                 for col_num, header in enumerate(breakdown_headers):
                     party_ws.write(start_row - 1, col_num, header, header_fmt)  # header at start_row-1 (since 0-index)
@@ -939,10 +955,10 @@ class ExcelExporter:
                     party_ws.write(excel_row, 5, row['Required TDS'], money_fmt)
                     party_ws.write(excel_row, 6, row['TDS Section'])
                     party_ws.write(excel_row, 7, row['Materiality Level'])
-                # Optionally add a note above the breakdown
-                party_ws.write(start_row - 2, 0, "Invoice-level breakdown for 194C (taxable value > 30,000 and party total < 100,000):")
+                # Add note about applicability
+                party_ws.write(start_row + len(inv_breakdown) + 1, 0, "Note: For these invoices, TDS is applicable under 194C (if taxable value > 30,000 and party total < 1,00,000).")
 
-            # --- Add pie chart to Executive Summary ---
+            # --- Add pie chart to Executive Summary with explanation in title ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
             sample_mat_summary.columns = ['Level','Count']
             chart_start_row = len(sample_df_out) + 5
@@ -956,7 +972,8 @@ class ExcelExporter:
                 'values':'=Sample Data!$AA${}:$AA${}'.format(chart_start_row+1, chart_start_row+len(sample_mat_summary)),
                 'data_labels':{'percentage':True}
             })
-            pie_chart.set_title({'name':'Sample Composition by Materiality'})
+            # Set chart title with explanation
+            pie_chart.set_title({'name':'Sample Composition by Materiality\n(Proportion of critical, high, medium, low, immaterial items selected)'})
             pie_chart.set_style(10)
             ws_summ.insert_chart('D2', pie_chart)
 
@@ -1184,9 +1201,9 @@ def main():
                 <div class="glass-card">
                     <h4>Export will include:</h4>
                     <ul>
-                        <li>📊 Executive Summary with Sample Composition pie chart</li>
-                        <li>📑 TDS Rates sheet with Limit column</li>
-                        <li>📑 Sampling Methods sheet explaining each selected method</li>
+                        <li>📊 Executive Summary with Sample Composition pie chart (title includes explanation)</li>
+                        <li>📑 TDS Rates sheet with Limit column and note for non-numeric limits</li>
+                        <li>📑 Sampling Methods sheet with detailed explanation and examples for each selected method</li>
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
                         <li>🔍 Sample Data with formulas incorporating party‑section total</li>
                         <li>📊 Analysis Sheet with dynamic formulas for Party_Section_Total and TDS Applicable</li>
