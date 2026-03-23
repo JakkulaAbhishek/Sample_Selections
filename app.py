@@ -50,15 +50,22 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- SAMPLE DATA GENERATOR ---
+# --- SAMPLE DATA GENERATOR (with diverse TDS sections) ---
 @st.cache_data
 def generate_sample_data():
+    # Use a variety of sections from TDS_RATES_DATA
     sample_data = [
         ["01-04-2023", "AAAA", "PEW/001/23-24", 135405.00, 114750.00, 10327.50, 10327.50, 0.00, 1147.50, "194C"],
         ["05-04-2023", "BBBB", "ST/23-24/468", 78479.44, 66508.00, 5985.72, 5985.72, 0.00, 665.08, "194C"],
         ["10-04-2023", "CCCC", "533", 25250.14, 21322.16, 1963.99, 1963.99, 0.00, 213.22, "194C"],
         ["15-04-2023", "DDDD", "6112303938", 10664.84, 9038.00, 0.00, 0.00, 1626.84, 90.38, "194C"],
         ["20-04-2023", "EEEE", "SAI/787/23-24", 67021.01, 5605.00, 512.55, 512.55, 0.00, 56.05, "194C"],
+        # Add additional rows with different sections for variety
+        ["25-04-2023", "FFFF", "INV/001", 500000.00, 450000.00, 40500.00, 40500.00, 0.00, 4500.00, "194H"],  # Commission
+        ["30-04-2023", "GGGG", "INV/002", 120000.00, 108000.00, 9720.00, 9720.00, 0.00, 2160.00, "194J(b)"],  # Professional services
+        ["05-05-2023", "HHHH", "INV/003", 75000.00, 67500.00, 6075.00, 6075.00, 0.00, 1350.00, "194D"],     # Insurance commission
+        ["10-05-2023", "IIII", "INV/004", 200000.00, 180000.00, 16200.00, 16200.00, 0.00, 3600.00, "194I"],    # Rent
+        ["15-05-2023", "JJJJ", "INV/005", 100000.00, 90000.00, 8100.00, 8100.00, 0.00, 900.00, "194Q"],     # Purchase of goods
     ]
     return pd.DataFrame(sample_data, columns=['Date','Party name','Invoice no','Gross Total','taxable value','Input CGST','Input SGST','Input IGST','TDS deducted','TDS Section'])
 
@@ -447,34 +454,34 @@ class SamplingEngine:
             return df.sample(n=min(n, len(df)), weights=prior, random_state=42)
         return df.sample(n=min(n, len(df)), random_state=42)
 
-# --- DICTIONARY OF SAMPLING METHOD DESCRIPTIONS (with examples) ---
+# --- DICTIONARY OF SAMPLING METHOD DESCRIPTIONS (with numeric examples) ---
 SAMPLING_DESCRIPTIONS = {
-    'Simple Random Sampling': 'Every item in the population has an equal chance of being selected. Often done using random numbers.\n\nExample: Assign a random number to each invoice and select the first 50 with the smallest random numbers.',
-    'Systematic Sampling': 'Select every kth item after a random start. Example: every 10th invoice after a random starting point.\n\nExample: Sort by date, pick a random start between 1 and 10, then take every 10th invoice thereafter.',
-    'Stratified Sampling': 'Population divided into strata (e.g., materiality levels), then random samples taken from each stratum proportionally.\n\nExample: Divide invoices into "High Value", "Medium Value", "Low Value" groups and take 10% from each group.',
-    'Cluster Sampling': 'Population divided into clusters (e.g., by geography or value groups); randomly select entire clusters and audit all items within them.\n\nExample: All invoices from 3 randomly selected branches (clusters) are audited fully.',
-    'Multistage Sampling': 'Combination of cluster and simple random sampling: first select clusters, then sample within clusters.\n\nExample: Select 5 branches, then within each branch select 20 invoices at random.',
-    'Multiphase Sampling': 'Collect preliminary information from a large sample, then subsample for more detailed audit.\n\nExample: First select 500 invoices to check for presence of supporting documents, then among those with issues, select 50 for deeper review.',
-    'Area Sampling': 'Similar to cluster sampling but based on geographic areas (e.g., postal codes).\n\nExample: Group invoices by city, then randomly select 3 cities and audit all invoices from those cities.',
-    'Probability Proportional to Size (PPS) Sampling': 'Items with larger value have higher probability of selection, focusing on materiality.\n\nExample: Larger invoices are more likely to be selected, ensuring material items are represented.',
-    'Convenience Sampling': 'Select items that are easiest to access (e.g., first few invoices). Not statistically representative.\n\nExample: Auditing the first 50 invoices in the binder because they are easiest to pull.',
-    'Judgmental Sampling': 'Auditor uses professional judgment to select items (e.g., high-value or high-risk transactions).\n\nExample: Select all invoices > ₹10,00,000 and all related party transactions.',
-    'Purposive Sampling': 'Items selected based on specific purpose, such as all critical materiality items.\n\nExample: Include every transaction flagged as "Critical" in materiality analysis.',
-    'Quota Sampling': 'Predefined quotas for different categories are filled (e.g., 10 from each materiality level).\n\nExample: Ensure the sample includes 5 critical, 10 high, 15 medium, and 20 low materiality items.',
-    'Snowball Sampling': 'Start with a few items, then ask them to refer other similar items (useful for fraud detection).\n\nExample: Start with one suspicious vendor, then check all invoices from that vendor, then all vendors that share the same address.',
-    'Volunteer Sampling': 'Items are self-selected; rarely used in audit, but can be applied for voluntary disclosures.\n\nExample: Request departments to voluntarily submit high-risk transactions for review.',
-    'Haphazard Sampling': 'Auditor picks items arbitrarily without any structured method. Not recommended for statistical validity.\n\nExample: Randomly flipping through the file and pointing to invoices without a formal random process.',
-    'Consecutive Sampling': 'Select a block of consecutive items (e.g., all invoices from a particular week).\n\nExample: Take all invoices from the last week of March.',
-    'Statistical Sampling': 'Any method that uses probability theory to select samples and evaluate results objectively.\n\nExample: Simple random sampling with a defined confidence level and tolerable error rate.',
-    'Non-Statistical Sampling': 'Auditor’s judgment drives selection; results cannot be projected statistically.\n\nExample: Judgmental sampling based on risk assessment.',
-    'Monetary Unit Sampling (MUS)': 'Also called dollar-unit sampling; each monetary unit has equal chance, giving higher chance to high-value items.\n\nExample: Each rupee in the population has an equal chance; select items based on cumulative totals.',
-    'Block Sampling': 'Select a contiguous block of items (e.g., all transactions in March).\n\nExample: All invoices issued in the month of April.',
-    'Sequential Sampling': 'Items are selected in sequence until a stopping rule is met based on error rates.\n\nExample: Select invoices one by one until the total error found exceeds a threshold.',
-    'Adaptive Sampling': 'Sampling intensity increases in areas where more errors are found.\n\nExample: If a certain department shows many errors, sample more items from that department.',
-    'Reservoir Sampling': 'Used for streaming data; maintains a random sample without knowing total population size.\n\nExample: While processing invoices as they arrive, maintain a random sample of 100 without needing to know total count.',
+    'Simple Random Sampling': 'Every item in the population has an equal chance of being selected. Often done using random numbers.\n\nExample: In a population of 1,000 invoices, assign a random number to each and select the 100 invoices with the smallest numbers.',
+    'Systematic Sampling': 'Select every kth item after a random start.\n\nExample: With 1,000 invoices sorted by date, pick a random start between 1 and 10 (say 5), then select invoices at positions 5, 15, 25, ... up to 100 items (k=10).',
+    'Stratified Sampling': 'Population divided into strata, then random samples taken from each stratum proportionally.\n\nExample: If 10% of total value is in "High Value" stratum (200 items), 30% in "Medium" (300 items), and 60% in "Low" (500 items), and sample size is 100, take 20 from high, 30 from medium, 50 from low.',
+    'Cluster Sampling': 'Divide population into clusters, randomly select entire clusters and audit all items within them.\n\nExample: Invoices grouped by branch (10 branches). Select 3 branches at random and audit every invoice in those branches.',
+    'Multistage Sampling': 'Combination of cluster and simple random sampling: first select clusters, then sample within clusters.\n\nExample: Select 5 branches (clusters), then within each branch select 20 invoices at random for a total of 100.',
+    'Multiphase Sampling': 'Collect preliminary information from a large sample, then subsample for more detailed audit.\n\nExample: First select 500 invoices to check for presence of supporting documents; among those with issues, select 50 for deeper review.',
+    'Area Sampling': 'Similar to cluster sampling but based on geographic areas.\n\nExample: Group invoices by postal code; randomly select 3 postal codes and audit all invoices from those areas.',
+    'Probability Proportional to Size (PPS) Sampling': 'Items with larger value have higher probability of selection.\n\nExample: An invoice of ₹1,00,000 is 100 times more likely to be selected than one of ₹1,000, ensuring material items are represented.',
+    'Convenience Sampling': 'Select items that are easiest to access.\n\nExample: Auditing the first 50 invoices in the binder because they are easiest to pull.',
+    'Judgmental Sampling': 'Auditor uses professional judgment to select items.\n\nExample: Select all invoices > ₹10,00,000 and all related party transactions.',
+    'Purposive Sampling': 'Items selected based on specific purpose.\n\nExample: Include every transaction flagged as "Critical" in materiality analysis (e.g., all items with value > materiality amount).',
+    'Quota Sampling': 'Predefined quotas for different categories are filled.\n\nExample: If sample size is 100 and there are 4 materiality levels, ensure 25 items from each level (quotas).',
+    'Snowball Sampling': 'Start with a few items, then ask them to refer other similar items.\n\nExample: Start with one suspicious vendor, then check all invoices from that vendor, then all vendors that share the same address.',
+    'Volunteer Sampling': 'Items are self-selected.\n\nExample: Request departments to voluntarily submit high-risk transactions for review; 10 departments respond with 5 items each, total 50.',
+    'Haphazard Sampling': 'Auditor picks items arbitrarily without structured method.\n\nExample: Randomly flipping through the file and pointing to invoices without a formal random process.',
+    'Consecutive Sampling': 'Select a block of consecutive items.\n\nExample: Take all invoices from the last week of March (dates 25th to 31st).',
+    'Statistical Sampling': 'Uses probability theory to select samples and evaluate results objectively.\n\nExample: Simple random sampling with a defined confidence level of 95% and tolerable error rate of 2%.',
+    'Non-Statistical Sampling': 'Auditor’s judgment drives selection; results cannot be projected statistically.\n\nExample: Judgmental sampling based on risk assessment, selecting 10% of the highest value items.',
+    'Monetary Unit Sampling (MUS)': 'Each monetary unit has equal chance, giving higher chance to high-value items.\n\nExample: With total value ₹10,00,000 and sample size 100, the sampling interval is ₹10,000; select every ₹10,000 cumulative monetary unit.',
+    'Block Sampling': 'Select a contiguous block of items.\n\nExample: All invoices issued in the month of April (500 items) as the sample.',
+    'Sequential Sampling': 'Items selected in sequence until a stopping rule is met.\n\nExample: Select invoices one by one until the total error found exceeds ₹1,00,000 or 50 items are selected.',
+    'Adaptive Sampling': 'Sampling intensity increases in areas where more errors are found.\n\nExample: If a certain department shows 10% errors, sample an additional 20 items from that department.',
+    'Reservoir Sampling': 'Maintains a random sample without knowing total population size.\n\nExample: While processing 5,000 invoices as they arrive, maintain a random sample of 100 without needing to know total count.',
     'Acceptance Sampling': 'Used to decide whether to accept or reject a population based on sample error rate.\n\nExample: If the sample error rate exceeds 2%, reject the entire batch for further scrutiny.',
-    'Bootstrap Sampling': 'Resampling with replacement from the original sample to estimate sampling distribution.\n\nExample: Take many random subsamples (with replacement) from the original sample to estimate variability.',
-    'Bayesian Sampling': 'Combines prior information with sample evidence to update probabilities.\n\nExample: Use prior audit findings to adjust the probability of selecting high-risk items.'
+    'Bootstrap Sampling': 'Resampling with replacement from the original sample to estimate sampling distribution.\n\nExample: Take 1,000 random subsamples (with replacement) of 100 items each from the original sample to estimate variability.',
+    'Bayesian Sampling': 'Combines prior information with sample evidence to update probabilities.\n\nExample: Use prior audit findings (e.g., 5% error rate) to adjust the probability of selecting high-risk items, updating as new evidence comes in.'
 }
 
 # --- EXCEL EXPORTER (updated with party-section total formulas and new 194C columns) ---
@@ -607,6 +614,8 @@ class ExcelExporter:
             ws_summ.write(12, 1, len(df[df['Materiality Level']=='💫 MEDIUM']), comma_fmt)
             ws_summ.write(13, 1, len(df[df['Materiality Level']=='🌟 LOW']), comma_fmt)
             ws_summ.write(14, 1, ', '.join(selected_methods))
+            # Chart explanation as a textbox within chart? We'll add a callout using Excel shape. But easier: add a note in the sheet near chart.
+            # We'll add a comment in cell E1 with explanation.
             ws_summ.write(16, 0, 'Chart Explanation:')
             ws_summ.write(16, 1, 'Pie chart shows the composition of the sample by Materiality Level, illustrating the proportion of critical, high, medium, low, and immaterial items selected. This helps auditors assess the risk coverage of the sample.')
             ws_summ.set_column('A:A', 30)
@@ -958,7 +967,7 @@ class ExcelExporter:
                 # Add note about applicability
                 party_ws.write(start_row + len(inv_breakdown) + 1, 0, "Note: For these invoices, TDS is applicable under 194C (if taxable value > 30,000 and party total < 1,00,000).")
 
-            # --- Add pie chart to Executive Summary with explanation in title ---
+            # --- Add pie chart to Executive Summary with clear explanation in title and data labels ---
             sample_mat_summary = sample_df['Materiality Level'].value_counts().reset_index()
             sample_mat_summary.columns = ['Level','Count']
             chart_start_row = len(sample_df_out) + 5
@@ -970,11 +979,14 @@ class ExcelExporter:
                 'name':'Sample Composition',
                 'categories':'=Sample Data!$Z${}:$Z${}'.format(chart_start_row+1, chart_start_row+len(sample_mat_summary)),
                 'values':'=Sample Data!$AA${}:$AA${}'.format(chart_start_row+1, chart_start_row+len(sample_mat_summary)),
-                'data_labels':{'percentage':True}
+                'data_labels':{'percentage':True, 'category':True, 'leader_lines':True, 'position':'outside_end'}
             })
-            # Set chart title with explanation
-            pie_chart.set_title({'name':'Sample Composition by Materiality\n(Proportion of critical, high, medium, low, immaterial items selected)'})
+            # Set chart title with multi-line explanation
+            pie_chart.set_title({
+                'name': 'Sample Composition by Materiality Level\n(Critical: highest risk, High: significant, Medium: moderate, Low: minor, Immaterial: negligible)\nEach slice shows percentage of sample items in that risk category.'
+            })
             pie_chart.set_style(10)
+            # Insert chart in Executive Summary sheet
             ws_summ.insert_chart('D2', pie_chart)
 
         return output.getvalue()
@@ -1201,9 +1213,9 @@ def main():
                 <div class="glass-card">
                     <h4>Export will include:</h4>
                     <ul>
-                        <li>📊 Executive Summary with Sample Composition pie chart (title includes explanation)</li>
+                        <li>📊 Executive Summary with Sample Composition pie chart (title includes explanation and data labels show percentages)</li>
                         <li>📑 TDS Rates sheet with Limit column and note for non-numeric limits</li>
-                        <li>📑 Sampling Methods sheet with detailed explanation and examples for each selected method</li>
+                        <li>📑 Sampling Methods sheet with detailed explanation and numeric examples for each selected method</li>
                         <li>📑 Complete Data (raw uploaded columns, no duplicate headers)</li>
                         <li>🔍 Sample Data with formulas incorporating party‑section total</li>
                         <li>📊 Analysis Sheet with dynamic formulas for Party_Section_Total and TDS Applicable</li>
