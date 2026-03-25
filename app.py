@@ -43,7 +43,7 @@ st.markdown("""
 
 st.markdown("""
 <div class="cyber-header">
-    <h1 style="font-family: 'Orbitron', sans-serif; font-size: 3.5rem; margin:0; color: white; text-align: center;">⚡ ULTRA-AUDIT PRO ⚡</h1>
+    <h1 style="font-family: 'Orbitron', sans-serif; font-size: 3.5rem; margin:0; color: white; text-align: center;">⚡ SAMPLE + TDS CHECK ⚡</h1>
     <p style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; text-align: center; color: rgba(255,255,255,0.9); margin-top: 10px;">
         Next-Gen AI-Powered Audit Intelligence | 25+ Sampling Methods | Multi-Method Selection | TDS Check with Limits
     </p>
@@ -1236,7 +1236,7 @@ def main():
     else:
         st.markdown("""
         <div style="text-align: center; padding: 50px;">
-            <h2 style="color: #00ff87; font-family: 'Orbitron', sans-serif;">🚀 ULTRA-AUDIT PRO READY</h2>
+            <h2 style="color: #00ff87; font-family: 'Orbitron', sans-serif;">🚀 SAMPLE + TDS CHECK READY</h2>
             <p style="color: white; font-size: 1.2rem;">Upload your ledger file with these exact columns:</p>
             <div style="background: rgba(0,255,135,0.1); padding: 20px; border-radius: 15px; margin: 20px auto; max-width: 900px;">
                 <code style="color: #00ff87; font-size: 1rem;">
