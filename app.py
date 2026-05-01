@@ -199,7 +199,7 @@ class DataProcessor:
 # --- MATERIALITY ENGINE ---
 class MaterialityEngine:
     def __init__(self, threshold_percent=5.0):
-        # threshold_percent is now derived from absolute amount
+        # threshold_percent is derived from absolute amount
         self.threshold_percent = threshold_percent
 
     def calculate(self, df):
@@ -498,7 +498,7 @@ class ExcelExporter:
         return letter
 
     @staticmethod
-    def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold_percent, interest_months=3):
+    def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_absolute_amount, interest_months=3):
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
@@ -605,11 +605,10 @@ class ExcelExporter:
             ws_summ.write(1, 1, datetime.now().strftime('%d-%m-%Y %H:%M'))
             ws_summ.write_formula(2, 1, '=COUNTA(\'Complete Data\'!A:A)-2', comma_fmt)
             ws_summ.write_formula(3, 1, '=SUM(\'Complete Data\'!E:E)', money_fmt)
-            # Write the materiality threshold percentage (derived from user amount)
-            ws_summ.write(4, 1, materiality_threshold_percent / 100, percent_fmt)
-            # Write the absolute materiality amount: this is the user's input amount, not calculated via formula
-            # We compute total value from the Complete Data sheet and multiply by threshold% to get amount
-            ws_summ.write_formula(5, 1, '=B4*B5', money_fmt)
+            # Materiality Threshold %: calculated as (absolute amount / total value)
+            ws_summ.write_formula(4, 1, '=B5/B3', percent_fmt)
+            # Materiality Amount (Absolute): static value entered by user
+            ws_summ.write(5, 1, materiality_absolute_amount, money_fmt)
             ws_summ.write_formula(6, 1, '=COUNTA(\'Sample Data\'!A:A)-2', comma_fmt)
             ws_summ.write_formula(7, 1, '=B7/B3', percent_fmt)
             ws_summ.write_formula(8, 1, '=SUM(\'Sample Data\'!E:E)', money_fmt)
@@ -1241,7 +1240,7 @@ def main():
                 if st.button('⚡ GENERATE COMPLETE REPORT WITH FORMULAS', use_container_width=True):
                     with st.spinner('Generating Excel with formulas...'):
                         exporter = ExcelExporter()
-                        excel_data = exporter.export_with_charts(df, combined_sample, party_stats, selected_methods, materiality_threshold_percent, interest_months)
+                        excel_data = exporter.export_with_charts(df, combined_sample, party_stats, selected_methods, materiality_amount_input, interest_months)
                         st.download_button('📥 DOWNLOAD EXCEL REPORT (WITH FORMULAS)', data=excel_data, file_name=f'Ultra_Audit_Report_{datetime.now():%Y%m%d_%H%M%S}.xlsx', use_container_width=True)
                         st.success('✅ Report generated successfully with party‑level TDS applicability and sampling explanations!')
         except Exception as e:
