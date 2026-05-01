@@ -198,12 +198,14 @@ class DataProcessor:
 
 # --- MATERIALITY ENGINE ---
 class MaterialityEngine:
-    def __init__(self, threshold=5.0):
-        self.threshold = threshold
+    def __init__(self, threshold_percent=5.0):
+        # threshold_percent is now derived from absolute amount
+        self.threshold_percent = threshold_percent
+
     def calculate(self, df):
         total = df['taxable value'].sum()
-        materiality_amount = total * (self.threshold / 100)
-        df['Materiality Score'] = (df['taxable value'] / materiality_amount).round(2) if materiality_amount>0 else 0
+        materiality_amount = total * (self.threshold_percent / 100)
+        df['Materiality Score'] = (df['taxable value'] / materiality_amount).round(2) if materiality_amount > 0 else 0
         conditions = [
             df['Materiality Score'] >= 0.5,
             df['Materiality Score'] >= 0.2,
@@ -496,7 +498,7 @@ class ExcelExporter:
         return letter
 
     @staticmethod
-    def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold, interest_months=3):
+    def export_with_charts(df, sample_df, party_stats, selected_methods, materiality_threshold_percent, interest_months=3):
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             workbook = writer.book
@@ -532,7 +534,7 @@ class ExcelExporter:
             tds_ws.write(1, 2, 'Rate', header_fmt)
             tds_ws.write(1, 3, 'Limit', header_fmt)
             for col_num, col_name in enumerate(tds_rates_df.columns):
-                # Already written header above manually, but we still write column headers for formatting consistency
+                # Already written header manually above, but we still write column headers for formatting consistency
                 pass
             # Write data rows starting at row 2
             for i, row in tds_rates_df.iterrows():
@@ -585,8 +587,8 @@ class ExcelExporter:
                 'Audit Date',
                 'Total Transactions',
                 'Total Value',
-                'Materiality Threshold',
-                'Materiality Amount',
+                'Materiality Threshold %',
+                'Materiality Amount (Absolute)',
                 'Sample Size',
                 'Sample Percentage',
                 'Sample Value',
@@ -603,7 +605,10 @@ class ExcelExporter:
             ws_summ.write(1, 1, datetime.now().strftime('%d-%m-%Y %H:%M'))
             ws_summ.write_formula(2, 1, '=COUNTA(\'Complete Data\'!A:A)-2', comma_fmt)
             ws_summ.write_formula(3, 1, '=SUM(\'Complete Data\'!E:E)', money_fmt)
-            ws_summ.write(4, 1, materiality_threshold / 100, percent_fmt)
+            # Write the materiality threshold percentage (derived from user amount)
+            ws_summ.write(4, 1, materiality_threshold_percent / 100, percent_fmt)
+            # Write the absolute materiality amount: this is the user's input amount, not calculated via formula
+            # We compute total value from the Complete Data sheet and multiply by threshold% to get amount
             ws_summ.write_formula(5, 1, '=B4*B5', money_fmt)
             ws_summ.write_formula(6, 1, '=COUNTA(\'Sample Data\'!A:A)-2', comma_fmt)
             ws_summ.write_formula(7, 1, '=B7/B3', percent_fmt)
@@ -1016,7 +1021,8 @@ def main():
             sample_df.to_excel(writer, sheet_name='Sample Data', index=False)
         st.download_button('📥 DOWNLOAD SAMPLE EXCEL', data=sample_excel.getvalue(), file_name='Ultra_Audit_Sample.xlsx', use_container_width=True)
         st.markdown('---')
-        materiality_threshold = st.slider('🎯 Materiality Threshold %', 0.1, 10.0, 5.0, 0.1)
+        # Materiality Threshold as an absolute amount (₹)
+        materiality_amount_input = st.number_input('🎯 Materiality Threshold Amount (₹)', min_value=1, value=500000, step=10000, format='%d')
         sample_percentage = st.slider('📊 Sample Selection %', 1, 100, 20)
         interest_months = st.number_input('💰 Interest Months', 1, 12, 3)
         st.markdown('---')
@@ -1064,7 +1070,15 @@ def main():
                 df[col] = processor.clean_numeric(df[col])
             df = processor.apply_formulas(df, interest_months)
 
-            mat_engine = MaterialityEngine(materiality_threshold)
+            # Compute total value for materiality percentage conversion
+            total_value = df['taxable value'].sum()
+            if total_value > 0:
+                # Convert absolute amount to percentage relative to total value
+                materiality_threshold_percent = (materiality_amount_input / total_value) * 100
+            else:
+                materiality_threshold_percent = 0.0
+
+            mat_engine = MaterialityEngine(materiality_threshold_percent)
             df, total_value, materiality_amount = mat_engine.calculate(df)
 
             # Sampling
@@ -1227,7 +1241,7 @@ def main():
                 if st.button('⚡ GENERATE COMPLETE REPORT WITH FORMULAS', use_container_width=True):
                     with st.spinner('Generating Excel with formulas...'):
                         exporter = ExcelExporter()
-                        excel_data = exporter.export_with_charts(df, combined_sample, party_stats, selected_methods, materiality_threshold, interest_months)
+                        excel_data = exporter.export_with_charts(df, combined_sample, party_stats, selected_methods, materiality_threshold_percent, interest_months)
                         st.download_button('📥 DOWNLOAD EXCEL REPORT (WITH FORMULAS)', data=excel_data, file_name=f'Ultra_Audit_Report_{datetime.now():%Y%m%d_%H%M%S}.xlsx', use_container_width=True)
                         st.success('✅ Report generated successfully with party‑level TDS applicability and sampling explanations!')
         except Exception as e:
