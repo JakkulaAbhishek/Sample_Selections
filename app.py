@@ -773,7 +773,7 @@ class ExcelExporter:
                 party_ws.write_formula(row, 6, f'=IFERROR(SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})/SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!F:F),0)', percent_fmt)
                 party_ws.write_formula(row, 7, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})', money_fmt)
                 party_ws.write_formula(row, 8, f'=SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!J:J)-SUMIF(\'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter})', money_fmt)
-                party_ws.write_formula(row, 9, f'=IF(H{row+1}>=0,"Compliant","Not Compliant")')
+                party_ws.write_formula(row, 9, f'=IF(I{row+1}>=0,"Compliant","Not Compliant")')
                 party_ws.write_formula(row, 13, f'=SUMIFS(\'Analysis\'!{req_tds_col_letter}:{req_tds_col_letter}, \'Analysis\'!B:B, {party_name_cell}, \'Analysis\'!K:K, "194C")', money_fmt)
 
             party_ws.set_column(0,0,30)
