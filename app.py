@@ -113,6 +113,27 @@ for row in TDS_RATES_DATA[1:]:
     tds_rate_dict[section] = rate
     tds_limit_dict[section] = limit
 
+# --- HELPER FOR 194C RATE DETECTION (PAN / GSTIN) ---
+def get_194c_rate_from_identifier(identifier):
+    """Return TDS rate (1 or 2 percent) based on PAN 4th char or GSTIN 6th char."""
+    if not isinstance(identifier, str) or len(identifier.strip()) == 0:
+        return None
+    ident = identifier.strip().upper()
+    # PAN: 10 characters, format: 5 letters, 4 digits, 1 letter
+    if len(ident) == 10:
+        # basic pattern check (optional)
+        if ident[:5].isalpha() and ident[5:9].isdigit() and ident[9].isalpha():
+            entity_char = ident[3]   # 4th character
+            mapping = {'P':1, 'F':2, 'C':2, 'H':1, 'A':2, 'T':2, 'L':2}
+            return mapping.get(entity_char)
+    # GSTIN: 15 characters, 6th character is entity type
+    elif len(ident) == 15:
+        if len(ident) >= 6:
+            entity_char = ident[5]
+            mapping = {'P':1, 'F':2, 'C':2, 'H':1, 'A':2, 'T':2, 'L':2}
+            return mapping.get(entity_char)
+    return None
+
 # --- DATA PROCESSING ---
 class DataProcessor:
     @staticmethod
@@ -146,8 +167,23 @@ class DataProcessor:
 
         df['TDS Applicable'] = df.apply(tds_applicable_row, axis=1)
 
+        # Base standard TDS rate from dictionary (may be overwritten for 194C)
         df['Std TDS Rate %'] = df['TDS Section'].map(lambda x: tds_rate_dict.get(str(x).strip().upper(), '1%'))
         df['Std TDS Rate %'] = df['Std TDS Rate %'].astype(str).str.replace('%', '').astype(float)
+
+        # -------- NEW: Override 194C rate based on PAN/GSTIN --------
+        mask_194c = df['TDS Section'].astype(str).str.strip().str.upper() == '194C'
+        if mask_194c.any():
+            override_rates = []
+            for idx, row in df[mask_194c].iterrows():
+                identifier = row.get('GST Number', '')
+                rate = get_194c_rate_from_identifier(identifier)
+                if rate is None:
+                    # Fallback default: 2% (safer for compliance)
+                    rate = 2.0
+                override_rates.append(rate)
+            df.loc[mask_194c, 'Std TDS Rate %'] = override_rates
+        # ------------------------------------------------------------
 
         df['Required TDS'] = np.where(df['TDS Applicable'],
                                       (df['taxable value'] * df['Std TDS Rate %'] / 100).round(2),
@@ -465,7 +501,7 @@ SAMPLING_DESCRIPTIONS = {
     'Bayesian Sampling': 'Combines prior information with sample evidence to update probabilities.\n\nExample: Use prior audit findings (e.g., 5% error rate) to adjust the probability of selecting high-risk items, updating as new evidence comes in.'
 }
 
-# --- EXCEL EXPORTER (FIXED: renamed inner helper to get_col_letter) ---
+# --- EXCEL EXPORTER ---
 class ExcelExporter:
     @staticmethod
     def col_letter(idx):
