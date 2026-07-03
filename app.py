@@ -1,5 +1,5 @@
 # =============================================================================
-# ULTRA AUDIT INTELLIGENCE v2.0
+# ULTRA AUDIT INTELLIGENCE v2.1
 # -----------------------------------------------------------------------------
 # Enterprise‑grade Sample + TDS Check Platform
 # 30+ Sampling Methods | Dynamic TDS Engine | Materiality Analysis | Export
@@ -18,7 +18,14 @@ import hashlib
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 import xlsxwriter
-from sklearn.cluster import KMeans  # optional, but we import safely
+
+# Optional sklearn – fallback gracefully
+try:
+    from sklearn.cluster import KMeans
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    KMeans = None
 
 warnings.filterwarnings('ignore')
 
@@ -86,10 +93,10 @@ class Config:
         'L': 10
     }
 
-    # 194I rate based on asset type (simplified: we treat all as 10% unless user overrides)
-    RATE_194I_DEFAULT = 10  # can be overridden in UI
+    # 194I rate – default 10% (can be overridden in UI)
+    RATE_194I_DEFAULT = 10
 
-    # 194N rate based on filer status (simplified: we use 2% default)
+    # 194N rate – default 2%
     RATE_194N_DEFAULT = 2
 
 
@@ -421,10 +428,12 @@ class SamplingEngine:
 
     @staticmethod
     def cluster(df: pd.DataFrame, pct: float, n_clusters: int = 5) -> pd.DataFrame:
+        """Cluster sampling – falls back to simple random if sklearn not available."""
+        if not SKLEARN_AVAILABLE:
+            return SamplingEngine.simple_random(df, pct)
+        if 'taxable_value' not in df.columns or len(df) < n_clusters:
+            return SamplingEngine.simple_random(df, pct)
         try:
-            from sklearn.cluster import KMeans
-            if 'taxable_value' not in df.columns or len(df) < n_clusters:
-                return SamplingEngine.simple_random(df, pct)
             X = df[['taxable_value']].values
             kmeans = KMeans(n_clusters=n_clusters, random_state=SamplingEngine.SEED, n_init=10)
             df_copy = df.copy()
